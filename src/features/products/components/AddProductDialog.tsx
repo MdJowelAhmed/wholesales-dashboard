@@ -29,6 +29,10 @@ const productSchema = z.object({
 
 type ProductFormData = z.infer<typeof productSchema>
 
+function generateVariantId(): string {
+  return `var-${Date.now()}-1`
+}
+
 interface AddProductDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -72,7 +76,7 @@ export function AddProductDialog({
         status: 'active',
         variants: [
           {
-            id: `var-${Date.now()}-1`,
+            id: generateVariantId(),
             sku: `${data.code.toUpperCase()}-${data.initialSize}`,
             size: data.initialSize,
             pricePerPiece: data.initialPricePerPiece,

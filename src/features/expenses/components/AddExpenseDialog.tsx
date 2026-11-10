@@ -15,6 +15,7 @@ import { Input } from '@/components/ui/input'
 import { financeRepository } from '@/mocks/repositories/financeRepository'
 import { toast } from 'sonner'
 import { formatBDT } from '@/lib/calculations/financialCalculations'
+import { getTodayDateString } from '@/lib/utils'
 
 const expenseSchema = z.object({
   date: z.string().min(1, 'Date is required'),
@@ -57,7 +58,7 @@ export function AddExpenseDialog({
   } = useForm<ExpenseFormData>({
     resolver: zodResolver(expenseSchema),
     defaultValues: {
-      date: new Date().toISOString().split('T')[0],
+      date: getTodayDateString(),
       title: 'Transport Van Hire to Islampur',
       category: 'transport',
       amount: 3500,

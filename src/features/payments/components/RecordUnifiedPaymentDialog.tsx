@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
 import { CreditCard } from 'lucide-react'
 import {
   Dialog,
@@ -11,7 +10,6 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { financeRepository } from '@/mocks/repositories/financeRepository'
 import { shopkeepersRepository } from '@/mocks/repositories/shopkeepersRepository'
 import { salesRepository } from '@/mocks/repositories/salesRepository'
@@ -23,18 +21,10 @@ import { Supplier } from '@/types/suppliers'
 import { Employee } from '@/types/employees'
 import { toast } from 'sonner'
 import { formatBDT } from '@/lib/calculations/financialCalculations'
-
-const paymentSchema = z.object({
-  partyType: z.enum(['shopkeeper', 'customer', 'supplier', 'employee']),
-  partyId: z.string().min(1, 'Please select a party'),
-  date: z.string().min(1, 'Date is required'),
-  amount: z.number().positive('Payment amount must be greater than zero'),
-  paymentMethod: z.enum(['cash', 'bank_transfer', 'cheque', 'bkash', 'nagad']),
-  reference: z.string().optional(),
-  notes: z.string().optional(),
-})
-
-type PaymentFormData = z.infer<typeof paymentSchema>
+import { getTodayDateString } from '@/lib/utils'
+import { paymentSchema, type PaymentFormData } from './unifiedPaymentSchema'
+import { PaymentPartySelectors } from './PaymentPartySelectors'
+import { PaymentAmountFields } from './PaymentAmountFields'
 
 interface RecordUnifiedPaymentDialogProps {
   open: boolean
@@ -53,6 +43,19 @@ export function RecordUnifiedPaymentDialog({
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [employees, setEmployees] = useState<Employee[]>([])
 
+  const defaultValues = React.useMemo<PaymentFormData>(
+    () => ({
+      partyType: 'shopkeeper',
+      partyId: '',
+      date: getTodayDateString(),
+      amount: 5000,
+      paymentMethod: 'cash',
+      reference: '',
+      notes: '',
+    }),
+    []
+  )
+
   const {
     register,
     handleSubmit,
@@ -62,15 +65,7 @@ export function RecordUnifiedPaymentDialog({
     formState: { errors },
   } = useForm<PaymentFormData>({
     resolver: zodResolver(paymentSchema),
-    defaultValues: {
-      partyType: 'shopkeeper',
-      partyId: '',
-      date: new Date().toISOString().split('T')[0],
-      amount: 5000,
-      paymentMethod: 'cash',
-      reference: '',
-      notes: '',
-    },
+    defaultValues,
   })
 
   useEffect(() => {
@@ -191,122 +186,19 @@ export function RecordUnifiedPaymentDialog({
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 py-2">
           {/* Party Type selector */}
-          <div className="space-y-1">
-            <label className="text-xs font-medium text-foreground">Transaction Party Type *</label>
-            <select
-              value={selectedPartyType}
-              onChange={handlePartyTypeChange}
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
-            >
-              <option value="shopkeeper">Wholesale Shopkeeper (Collection In)</option>
-              <option value="customer">Retail Customer (Collection In)</option>
-              <option value="supplier">Material Supplier (Payment Out)</option>
-              <option value="employee">Worker / Staff (Wage Payout)</option>
-            </select>
-          </div>
+          <PaymentPartySelectors
+            selectedPartyType={selectedPartyType}
+            partyInfo={partyInfo}
+            shopkeepers={shopkeepers}
+            customers={customers}
+            suppliers={suppliers}
+            employees={employees}
+            onPartyTypeChange={handlePartyTypeChange}
+            register={register}
+            errors={errors}
+          />
 
-          {/* Party Dropdown */}
-          <div className="space-y-1">
-            <label className="text-xs font-medium text-foreground">Select Party *</label>
-            <select
-              {...register('partyId')}
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
-            >
-              {selectedPartyType === 'shopkeeper' &&
-                shopkeepers.map((sk) => (
-                  <option key={sk.id} value={sk.id}>
-                    {sk.shopName} - {sk.marketName} (Due: ৳{sk.outstandingBalance})
-                  </option>
-                ))}
-              {selectedPartyType === 'customer' &&
-                customers.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name} {c.phone ? `(${c.phone})` : ''} (Due: ৳{c.outstandingBalance})
-                  </option>
-                ))}
-              {selectedPartyType === 'supplier' &&
-                suppliers.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name} ({s.contactPerson}) (Payable: ৳{s.outstandingPayable})
-                  </option>
-                ))}
-              {selectedPartyType === 'employee' &&
-                employees.map((e) => (
-                  <option key={e.id} value={e.id}>
-                    {e.name} - {e.designation} (Payable: ৳{e.currentPayableBalance})
-                  </option>
-                ))}
-            </select>
-            {errors.partyId && (
-              <p className="text-xs text-destructive">{errors.partyId.message}</p>
-            )}
-          </div>
-
-          {/* Party Balance Snapshot */}
-          {partyInfo && (
-            <div className="rounded-lg border border-border bg-muted/20 p-3 flex justify-between items-center text-xs">
-              <span className="text-muted-foreground">{partyInfo.label}:</span>
-              <span className="font-semibold text-foreground">{formatBDT(partyInfo.balance)}</span>
-            </div>
-          )}
-
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-foreground">Payment Date *</label>
-              <Input type="date" {...register('date')} className="bg-background" />
-              {errors.date && <p className="text-xs text-destructive">{errors.date.message}</p>}
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-foreground">Amount (৳ BDT) *</label>
-              <Input
-                type="number"
-                step="0.01"
-                min={1}
-                {...register('amount', { valueAsNumber: true })}
-                className="bg-background"
-              />
-              {errors.amount && (
-                <p className="text-xs text-destructive">{errors.amount.message}</p>
-              )}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-foreground">Payment Method *</label>
-              <select
-                {...register('paymentMethod')}
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
-              >
-                <option value="cash">Cash (নগদ)</option>
-                <option value="bank_transfer">Bank Transfer</option>
-                <option value="cheque">Cheque</option>
-                <option value="bkash">bKash (বিকাশ)</option>
-                <option value="nagad">Nagad (নগদ)</option>
-              </select>
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-foreground">Txn ID / Cheque #</label>
-              <Input
-                type="text"
-                placeholder="e.g. TR-998812 / CHQ-102"
-                {...register('reference')}
-                className="bg-background"
-              />
-            </div>
-          </div>
-
-          <div className="space-y-1">
-            <label className="text-xs font-medium text-foreground">Remarks / Ledger Note</label>
-            <Input
-              type="text"
-              placeholder="e.g. Partial settlement against delivery"
-              {...register('notes')}
-              className="bg-background"
-            />
-          </div>
+          <PaymentAmountFields register={register} errors={errors} />
 
           <div className="text-xs text-muted-foreground p-2 rounded bg-muted/10">
             {isDisbursement ? (

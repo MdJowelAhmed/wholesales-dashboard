@@ -49,3 +49,11 @@ export function getTodayDateString(): string {
   return format(new Date(), 'yyyy-MM-dd')
 }
 
+/**
+ * Get future date offset by days as YYYY-MM-DD
+ */
+export function getFutureDateString(days: number): string {
+  const future = new Date(Date.now() + days * 86400000)
+  return format(future, 'yyyy-MM-dd')
+}
+

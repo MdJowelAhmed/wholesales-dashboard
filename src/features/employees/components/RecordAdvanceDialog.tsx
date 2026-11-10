@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useMemo } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -15,6 +15,7 @@ import { Input } from '@/components/ui/input'
 import { employeesRepository } from '@/mocks/repositories/employeesRepository'
 import { toast } from 'sonner'
 import { formatBDT } from '@/lib/calculations/financialCalculations'
+import { getTodayDateString } from '@/lib/utils/date'
 
 const advanceSchema = z.object({
   date: z.string().min(1, 'Date is required'),
@@ -40,6 +41,7 @@ export function RecordAdvanceDialog({
   onSuccess,
 }: RecordAdvanceDialogProps): React.JSX.Element {
   const [loading, setLoading] = useState(false)
+  const today = useMemo(() => getTodayDateString(), [])
 
   const {
     register,
@@ -49,7 +51,7 @@ export function RecordAdvanceDialog({
   } = useForm<AdvanceFormData>({
     resolver: zodResolver(advanceSchema),
     defaultValues: {
-      date: new Date().toISOString().split('T')[0],
+      date: today,
       amount: 2000,
       notes: 'Emergency cash advance',
     },

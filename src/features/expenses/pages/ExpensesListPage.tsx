@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useMemo, useTransition } from 'react'
 import {
   Receipt,
   Plus,
@@ -11,37 +11,31 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { financeRepository } from '@/mocks/repositories/financeRepository'
+import { useRepositoryQuery } from '@/lib/hooks'
 import { ExpenseRecord } from '@/types/finance'
 import { formatBDT } from '@/lib/calculations/financialCalculations'
 import { AddExpenseDialog } from '../components/AddExpenseDialog'
+import { ExpensesTable } from '../components/ExpensesTable'
 
 export function ExpensesListPage() {
-  const [expenses, setExpenses] = useState<ExpenseRecord[]>([])
-  const [loading, setLoading] = useState(true)
-
   const [searchTerm, setSearchTerm] = useState('')
   const [categoryFilter, setCategoryFilter] = useState<string>('all')
   const [methodFilter, setMethodFilter] = useState<string>('all')
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [, startTransition] = useTransition()
 
-  const loadExpenses = async () => {
-    try {
-      setLoading(true)
-      const data = await financeRepository.listExpenses()
-      setExpenses(data)
-    } catch (err) {
-      console.error('Failed to load expense records', err)
-    } finally {
-      setLoading(false)
-    }
+  const { data: expenses = [], loading, refetch } = useRepositoryQuery<ExpenseRecord[]>(
+    () => financeRepository.listExpenses(),
+    { initialData: [] }
+  )
+
+  const handleRefetch = () => {
+    startTransition(() => {
+      refetch()
+    })
   }
-
-  useEffect(() => {
-    loadExpenses()
-  }, [])
 
   const filteredExpenses = useMemo(() => {
     return expenses.filter((e) => {
@@ -57,25 +51,23 @@ export function ExpensesListPage() {
     })
   }, [expenses, searchTerm, categoryFilter, methodFilter])
 
-  // Summary Metrics
   const metrics = useMemo(() => {
-    const total = expenses.reduce((sum, e) => sum + e.amount, 0)
+    const total = expenses.reduce((sum, e) => sum + (e.amount ?? 0), 0)
     const utilities = expenses
       .filter((e) => e.category === 'electricity')
-      .reduce((sum, e) => sum + e.amount, 0)
+      .reduce((sum, e) => sum + (e.amount ?? 0), 0)
     const transport = expenses
       .filter((e) => e.category === 'transport')
-      .reduce((sum, e) => sum + e.amount, 0)
+      .reduce((sum, e) => sum + (e.amount ?? 0), 0)
     const packaging = expenses
       .filter((e) => e.category === 'packaging')
-      .reduce((sum, e) => sum + e.amount, 0)
+      .reduce((sum, e) => sum + (e.amount ?? 0), 0)
 
     return { total, utilities, transport, packaging }
   }, [expenses])
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-2">
@@ -83,7 +75,7 @@ export function ExpensesListPage() {
             Factory & Operational Expenses
           </h1>
           <p className="text-sm text-muted-foreground">
-            Factory rent, DESCO electricity bills, transport vans, packaging cartons, and generator fuel
+            Track manufacturing utilities, machine maintenance, packaging trims, and logistic overheads
           </p>
         </div>
         <Button
@@ -96,7 +88,6 @@ export function ExpensesListPage() {
         </Button>
       </div>
 
-      {/* KPI Cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card className="border-border bg-card">
           <CardContent className="p-5">
@@ -107,7 +98,7 @@ export function ExpensesListPage() {
             <div className="mt-2 text-2xl font-bold text-foreground">
               {formatBDT(metrics.total)}
             </div>
-            <p className="mt-1 text-xs text-muted-foreground">Across {expenses.length} vouchers</p>
+            <p className="mt-1 text-xs text-muted-foreground">Direct overhead costs</p>
           </CardContent>
         </Card>
 
@@ -120,7 +111,7 @@ export function ExpensesListPage() {
             <div className="mt-2 text-2xl font-bold text-foreground">
               {formatBDT(metrics.utilities)}
             </div>
-            <p className="mt-1 text-xs text-muted-foreground">DESCO bills & generator fuel</p>
+            <p className="mt-1 text-xs text-muted-foreground">Factory power & generator</p>
           </CardContent>
         </Card>
 
@@ -133,31 +124,30 @@ export function ExpensesListPage() {
             <div className="mt-2 text-2xl font-bold text-foreground">
               {formatBDT(metrics.transport)}
             </div>
-            <p className="mt-1 text-xs text-muted-foreground">Wholesale delivery vans & fares</p>
+            <p className="mt-1 text-xs text-muted-foreground">Cartage & shop dispatches</p>
           </CardContent>
         </Card>
 
         <Card className="border-border bg-card">
           <CardContent className="p-5">
             <div className="flex items-center justify-between">
-              <span className="text-sm font-medium text-muted-foreground">Packaging & Cartons</span>
+              <span className="text-sm font-medium text-muted-foreground">Packaging & Poly Bags</span>
               <Box className="h-4 w-4 text-emerald-500" />
             </div>
             <div className="mt-2 text-2xl font-bold text-foreground">
               {formatBDT(metrics.packaging)}
             </div>
-            <p className="mt-1 text-xs text-muted-foreground">Corrugated boxes & poly packs</p>
+            <p className="mt-1 text-xs text-muted-foreground">Finished garment boxes & poly</p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Filter and Search Bar */}
       <Card className="border-border bg-card">
         <CardContent className="p-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="relative flex-1 max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Search by voucher #, title, or ref..."
+              placeholder="Search by voucher #, title, or reference..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-9 bg-background"
@@ -174,9 +164,9 @@ export function ExpensesListPage() {
                 onChange={(e) => setCategoryFilter(e.target.value)}
                 className="h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
               >
-                <option value="all">All Categories</option>
-                <option value="rent">Factory Rent</option>
+                <option value="all">All Expense Categories</option>
                 <option value="electricity">Electricity / Power</option>
+                <option value="rent">Factory / Showroom Rent</option>
                 <option value="transport">Transport / Logistics</option>
                 <option value="packaging">Packaging Materials</option>
                 <option value="maintenance">Machine Maintenance</option>
@@ -202,82 +192,15 @@ export function ExpensesListPage() {
         </CardContent>
       </Card>
 
-      {/* Expenses Table */}
-      <Card className="border-border bg-card">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-muted/50 text-xs uppercase text-muted-foreground">
-              <tr>
-                <th className="px-4 py-3">Voucher #</th>
-                <th className="px-4 py-3">Date</th>
-                <th className="px-4 py-3">Title / Description</th>
-                <th className="px-4 py-3">Category</th>
-                <th className="px-4 py-3 text-right">Amount</th>
-                <th className="px-4 py-3">Payment Method</th>
-                <th className="px-4 py-3">Ref / Memo #</th>
-                <th className="px-4 py-3">Notes</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {loading ? (
-                <tr>
-                  <td colSpan={8} className="py-8 text-center text-muted-foreground">
-                    Loading expenses...
-                  </td>
-                </tr>
-              ) : filteredExpenses.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="py-8 text-center text-muted-foreground">
-                    No expense records found matching criteria.
-                  </td>
-                </tr>
-              ) : (
-                filteredExpenses.map((exp) => (
-                  <tr key={exp.id} className="hover:bg-muted/30 transition-colors">
-                    <td className="px-4 py-3 font-semibold text-foreground font-mono">
-                      {exp.expenseNumber}
-                    </td>
-                    <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
-                      {exp.date}
-                    </td>
-                    <td className="px-4 py-3 font-medium text-foreground">
-                      {exp.title}
-                    </td>
-                    <td className="px-4 py-3">
-                      <Badge variant="outline" className="text-[11px] capitalize">
-                        {exp.category.replace('_', ' ')}
-                      </Badge>
-                    </td>
-                    <td className="px-4 py-3 text-right font-bold text-foreground">
-                      {formatBDT(exp.amount)}
-                    </td>
-                    <td className="px-4 py-3">
-                      <Badge
-                        variant="secondary"
-                        className="bg-muted text-foreground text-xs uppercase"
-                      >
-                        {exp.paymentMethod.replace('_', ' ')}
-                      </Badge>
-                    </td>
-                    <td className="px-4 py-3 text-xs text-muted-foreground font-mono">
-                      {exp.reference || '-'}
-                    </td>
-                    <td className="px-4 py-3 text-xs text-muted-foreground max-w-xs truncate">
-                      {exp.notes || '-'}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+      <ExpensesTable
+        loading={loading}
+        filteredExpenses={filteredExpenses}
+      />
 
-      {/* Add Expense Dialog */}
       <AddExpenseDialog
         open={dialogOpen}
         onOpenChange={setDialogOpen}
-        onSuccess={loadExpenses}
+        onSuccess={handleRefetch}
       />
     </div>
   )

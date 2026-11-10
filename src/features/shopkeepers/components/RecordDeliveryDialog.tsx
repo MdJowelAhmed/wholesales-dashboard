@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
 import { Truck } from 'lucide-react'
 import {
   Dialog,
@@ -18,19 +17,9 @@ import { Product } from '@/types/products'
 import { ShopkeeperTransactionType } from '@/types/shopkeepers'
 import { toast } from 'sonner'
 import { formatBDT, calculateLineTotal } from '@/lib/calculations/financialCalculations'
-
-const deliverySchema = z.object({
-  date: z.string().min(1, 'Date is required'),
-  transactionType: z.enum(['credit_sale', 'consignment']),
-  productId: z.string().min(1, 'Select a product'),
-  variantId: z.string().min(1, 'Select a size variant'),
-  quantityPieces: z.number().int().positive('Quantity must be at least 1 piece'),
-  pricePerPiece: z.number().positive('Per-piece price must be greater than 0'),
-  paidAmount: z.number().min(0).optional(),
-  notes: z.string().optional(),
-})
-
-type DeliveryFormData = z.infer<typeof deliverySchema>
+import { getTodayDateString } from '@/lib/utils'
+import { deliverySchema, type DeliveryFormData } from './deliveryDialogSchema'
+import { ShopkeeperDeliveryItemFields } from './ShopkeeperDeliveryItemFields'
 
 interface RecordDeliveryDialogProps {
   shopkeeperId: string
@@ -50,6 +39,20 @@ export function RecordDeliveryDialog({
   const [loading, setLoading] = useState(false)
   const [products, setProducts] = useState<Product[]>([])
 
+  const defaultValues = React.useMemo<DeliveryFormData>(
+    () => ({
+      date: getTodayDateString(),
+      transactionType: 'credit_sale',
+      productId: '',
+      variantId: '',
+      quantityPieces: 50,
+      pricePerPiece: 280,
+      paidAmount: 0,
+      notes: 'Delivered via Islampur market pickup',
+    }),
+    []
+  )
+
   const {
     register,
     handleSubmit,
@@ -59,16 +62,7 @@ export function RecordDeliveryDialog({
     formState: { errors },
   } = useForm<DeliveryFormData>({
     resolver: zodResolver(deliverySchema),
-    defaultValues: {
-      date: new Date().toISOString().split('T')[0],
-      transactionType: 'credit_sale',
-      productId: '',
-      variantId: '',
-      quantityPieces: 50,
-      pricePerPiece: 280,
-      paidAmount: 0,
-      notes: 'Delivered via Islampur market pickup',
-    },
+    defaultValues,
   })
 
   useEffect(() => {
@@ -188,74 +182,21 @@ export function RecordDeliveryDialog({
             </p>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <label className="text-xs font-semibold text-foreground">Delivery Date *</label>
-              <Input type="date" {...register('date')} />
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-xs font-semibold text-foreground">
-                Garment Product *
-              </label>
-              <select
-                value={selectedProductId}
-                onChange={handleProductChange}
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-              >
-                {products.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name} ({p.code})
-                  </option>
-                ))}
-              </select>
-            </div>
+          <div className="space-y-1">
+            <label className="text-xs font-semibold text-foreground">Delivery Date *</label>
+            <Input type="date" {...register('date')} />
           </div>
 
-          <div className="grid grid-cols-3 gap-3">
-            <div className="space-y-1">
-              <label className="text-xs font-semibold text-foreground">Size Variant *</label>
-              <select
-                value={selectedVariantId}
-                onChange={handleVariantChange}
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-              >
-                {selectedProduct?.variants.map((v) => (
-                  <option key={v.id} value={v.id}>
-                    Size {v.size} {v.color ? `(${v.color})` : ''}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-xs font-semibold text-foreground">
-                Quantity (Pieces) *
-              </label>
-              <Input
-                type="number"
-                placeholder="50"
-                {...register('quantityPieces', { valueAsNumber: true })}
-              />
-              {errors.quantityPieces && (
-                <p className="text-[10px] text-destructive">
-                  {errors.quantityPieces.message}
-                </p>
-              )}
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-xs font-semibold text-foreground">
-                Price / Piece (৳) *
-              </label>
-              <Input
-                type="number"
-                step="any"
-                placeholder="280"
-                {...register('pricePerPiece', { valueAsNumber: true })}
-              />
-            </div>
-          </div>
+          <ShopkeeperDeliveryItemFields
+            products={products}
+            selectedProduct={selectedProduct}
+            selectedProductId={selectedProductId}
+            selectedVariantId={selectedVariantId}
+            onProductChange={handleProductChange}
+            onVariantChange={handleVariantChange}
+            register={register}
+            errors={errors}
+          />
 
           {/* Pricing Calculation Summary */}
           <div className="p-3 rounded-lg border border-border bg-muted/20 flex items-center justify-between text-xs">

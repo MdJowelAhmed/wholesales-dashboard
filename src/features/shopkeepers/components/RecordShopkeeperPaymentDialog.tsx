@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useMemo } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -15,6 +15,7 @@ import { Input } from '@/components/ui/input'
 import { shopkeepersRepository } from '@/mocks/repositories/shopkeepersRepository'
 import { toast } from 'sonner'
 import { formatBDT } from '@/lib/calculations/financialCalculations'
+import { getTodayDateString } from '@/lib/utils'
 
 const paymentSchema = z.object({
   date: z.string().min(1, 'Date is required'),
@@ -45,6 +46,17 @@ export function RecordShopkeeperPaymentDialog({
 }: RecordShopkeeperPaymentDialogProps): React.JSX.Element {
   const [loading, setLoading] = useState(false)
 
+  const defaultValues = useMemo<PaymentFormData>(
+    () => ({
+      date: getTodayDateString(),
+      amount: outstandingBalance > 0 ? outstandingBalance : 20000,
+      paymentMethod: 'cash',
+      reference: 'CR-',
+      notes: 'Collected at wholesale shop',
+    }),
+    [outstandingBalance]
+  )
+
   const {
     register,
     handleSubmit,
@@ -52,13 +64,7 @@ export function RecordShopkeeperPaymentDialog({
     formState: { errors },
   } = useForm<PaymentFormData>({
     resolver: zodResolver(paymentSchema),
-    defaultValues: {
-      date: new Date().toISOString().split('T')[0],
-      amount: outstandingBalance > 0 ? outstandingBalance : 20000,
-      paymentMethod: 'cash',
-      reference: 'CR-',
-      notes: 'Collected at wholesale shop',
-    },
+    defaultValues,
   })
 
   const onSubmit = async (data: PaymentFormData) => {

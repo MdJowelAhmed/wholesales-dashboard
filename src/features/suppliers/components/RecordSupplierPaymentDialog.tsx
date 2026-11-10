@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useMemo } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -15,6 +15,7 @@ import { Input } from '@/components/ui/input'
 import { suppliersRepository } from '@/mocks/repositories/suppliersRepository'
 import { toast } from 'sonner'
 import { formatBDT } from '@/lib/calculations/financialCalculations'
+import { getTodayDateString } from '@/lib/utils/date'
 
 const paymentSchema = z.object({
   date: z.string().min(1, 'Date is required'),
@@ -44,6 +45,7 @@ export function RecordSupplierPaymentDialog({
   onSuccess,
 }: RecordSupplierPaymentDialogProps): React.JSX.Element {
   const [loading, setLoading] = useState(false)
+  const today = useMemo(() => getTodayDateString(), [])
 
   const {
     register,
@@ -53,7 +55,7 @@ export function RecordSupplierPaymentDialog({
   } = useForm<PaymentFormData>({
     resolver: zodResolver(paymentSchema),
     defaultValues: {
-      date: new Date().toISOString().split('T')[0],
+      date: today,
       amount: outstandingPayable > 0 ? outstandingPayable : 50000,
       paymentMethod: 'bank_transfer',
       reference: 'DBBL-TXN-',

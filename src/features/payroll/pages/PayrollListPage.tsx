@@ -1,30 +1,26 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useMemo, useTransition } from 'react'
 import {
   Banknote,
-  Plus,
   Search,
   DollarSign,
   CheckCircle2,
   AlertCircle,
-  Eye,
   Sparkles,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { financeRepository } from '@/mocks/repositories/financeRepository'
+import { useRepositoryQuery } from '@/lib/hooks'
 import { PayrollRecord } from '@/types/finance'
 import { PaymentMethod } from '@/types/common'
 import { formatBDT } from '@/lib/calculations/financialCalculations'
 import { PayslipDialog } from '../components/PayslipDialog'
 import { DisbursePayrollDialog } from '../components/DisbursePayrollDialog'
+import { PayrollTable } from '../components/PayrollTable'
 import { toast } from 'sonner'
 
 export function PayrollListPage() {
-  const [payroll, setPayroll] = useState<PayrollRecord[]>([])
-  const [loading, setLoading] = useState(true)
-
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | 'paid' | 'partial' | 'pending'>('all')
   const [periodFilter, setPeriodFilter] = useState<string>('all')
@@ -32,22 +28,18 @@ export function PayrollListPage() {
   const [activePayslip, setActivePayslip] = useState<PayrollRecord | null>(null)
   const [disburseTarget, setDisburseTarget] = useState<PayrollRecord | null>(null)
   const [generating, setGenerating] = useState(false)
+  const [, startTransition] = useTransition()
 
-  const loadPayroll = async () => {
-    try {
-      setLoading(true)
-      const data = await financeRepository.listPayroll()
-      setPayroll(data)
-    } catch (err) {
-      console.error('Failed to load payroll records', err)
-    } finally {
-      setLoading(false)
-    }
+  const { data: payroll = [], loading, refetch } = useRepositoryQuery<PayrollRecord[]>(
+    () => financeRepository.listPayroll(),
+    { initialData: [] }
+  )
+
+  const handleRefetch = () => {
+    startTransition(() => {
+      refetch()
+    })
   }
-
-  useEffect(() => {
-    loadPayroll()
-  }, [])
 
   const availablePeriods = useMemo(() => {
     const set = new Set<string>()
@@ -67,24 +59,27 @@ export function PayrollListPage() {
     })
   }, [payroll, searchTerm, statusFilter, periodFilter])
 
-  // Summary Metrics
   const metrics = useMemo(() => {
-    const totalPayable = payroll.reduce((sum, p) => sum + p.netPayable, 0)
-    const totalPaid = payroll.reduce((sum, p) => sum + p.paidAmount, 0)
-    const totalRemaining = payroll.reduce((sum, p) => sum + p.remainingPayable, 0)
-    return { totalPayable, totalPaid, totalRemaining, count: payroll.length }
+    const totalGross = payroll.reduce(
+      (sum, p) => sum + (p.netPayable ?? 0) + (p.advancesDeducted ?? 0),
+      0
+    )
+    const totalPaid = payroll.reduce((sum, p) => sum + (p.paidAmount ?? 0), 0)
+    const totalRemaining = payroll.reduce((sum, p) => sum + (p.remainingPayable ?? 0), 0)
+    const totalEmployees = payroll.length
+
+    return { totalGross, totalPaid, totalRemaining, totalEmployees }
   }, [payroll])
 
-  const handleGeneratePayroll = async () => {
+  const handleGenerate = async () => {
     try {
       setGenerating(true)
       const currentPeriod = 'October 2026'
       await financeRepository.generatePayroll(currentPeriod)
       toast.success(`Generated payroll for ${currentPeriod}`)
-      await loadPayroll()
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to generate payroll'
-      toast.error(msg)
+      handleRefetch()
+    } catch {
+      toast.error('Failed to generate payroll')
     } finally {
       setGenerating(false)
     }
@@ -93,52 +88,47 @@ export function PayrollListPage() {
   const handleDisburseConfirm = async (targetId: string, method: PaymentMethod, amount: number) => {
     try {
       await financeRepository.disbursePayroll(targetId, method, amount)
-      const target = payroll.find((p) => p.id === targetId)
-      toast.success(`Disbursed ${formatBDT(amount)} to ${target?.employeeName || 'employee'}`)
-      setDisburseTarget(null)
-      await loadPayroll()
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Disbursement failed'
-      toast.error(msg)
-      throw err
+      toast.success('Wages disbursed and ledger updated successfully')
+      handleRefetch()
+    } catch {
+      toast.error('Failed to disburse payroll')
     }
   }
 
   return (
     <div className="space-y-6">
-      {/* Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-border">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-2">
-            <Banknote className="h-7 w-7 text-primary" />
+            <Banknote className="h-6 w-6 text-primary" />
             Worker Payroll & Wages
           </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Automated piece-rate sewing wage calculation, monthly fixed salaries, advance recoveries, and pay slips.
+          <p className="text-xs text-muted-foreground mt-1">
+            Factory tailor piece-rate earnings, monthly fixed salaries, and wage disbursement vouchers.
           </p>
         </div>
 
         <Button
-          onClick={handleGeneratePayroll}
+          onClick={handleGenerate}
           disabled={generating}
-          className="bg-primary text-primary-foreground shadow-sm flex items-center gap-2 self-start sm:self-auto"
+          className="bg-primary text-primary-foreground text-xs shadow-sm"
         >
-          <Sparkles className="h-4 w-4" />
+          <Sparkles className="mr-1.5 h-3.5 w-3.5" />
           {generating ? 'Calculating Wages...' : 'Generate Monthly Payroll'}
         </Button>
       </div>
 
-      {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="bg-card text-card-foreground border-border shadow-sm">
-          <CardContent className="p-4 flex items-center justify-between">
+          <CardContent className="p-5 flex items-center justify-between">
             <div>
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                Total Payroll Bill
-              </p>
-              <h3 className="text-xl font-bold text-foreground mt-1">
-                {formatBDT(metrics.totalPayable)}
-              </h3>
+              <p className="text-xs font-medium text-muted-foreground">Total Payroll Bill</p>
+              <h2 className="text-xl font-bold text-foreground mt-1">
+                {formatBDT(metrics.totalGross)}
+              </h2>
+              <span className="text-[10px] text-muted-foreground mt-0.5 block">
+                Across {metrics.totalEmployees} factory staff
+              </span>
             </div>
             <div className="h-10 w-10 rounded-full bg-primary/10 text-primary flex items-center justify-center">
               <DollarSign className="h-5 w-5" />
@@ -147,53 +137,57 @@ export function PayrollListPage() {
         </Card>
 
         <Card className="bg-card text-card-foreground border-border shadow-sm">
-          <CardContent className="p-4 flex items-center justify-between">
+          <CardContent className="p-5 flex items-center justify-between">
             <div>
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                Total Paid Wages
-              </p>
-              <h3 className="text-xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">
+              <p className="text-xs font-medium text-muted-foreground">Total Paid Wages</p>
+              <h2 className="text-xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">
                 {formatBDT(metrics.totalPaid)}
-              </h3>
+              </h2>
+              <span className="text-[10px] text-muted-foreground mt-0.5 block">
+                Disbursed to date
+              </span>
             </div>
-            <div className="h-10 w-10 rounded-full bg-emerald-500/10 text-emerald-600 flex items-center justify-center">
+            <div className="h-10 w-10 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
               <CheckCircle2 className="h-5 w-5" />
             </div>
           </CardContent>
         </Card>
 
         <Card className="bg-card text-card-foreground border-border shadow-sm">
-          <CardContent className="p-4 flex items-center justify-between">
+          <CardContent className="p-5 flex items-center justify-between">
             <div>
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                Wage Liabilities Due
-              </p>
-              <h3 className="text-xl font-bold text-rose-600 dark:text-rose-400 mt-1">
+              <p className="text-xs font-medium text-muted-foreground">Wage Liabilities Due</p>
+              <h2 className="text-xl font-bold text-rose-600 dark:text-rose-400 mt-1">
                 {formatBDT(metrics.totalRemaining)}
-              </h3>
+              </h2>
+              <span className="text-[10px] text-muted-foreground mt-0.5 block">
+                Awaiting disbursement
+              </span>
             </div>
-            <div className="h-10 w-10 rounded-full bg-rose-500/10 text-rose-600 flex items-center justify-center">
+            <div className="h-10 w-10 rounded-full bg-rose-500/10 text-rose-600 dark:text-rose-400 flex items-center justify-center">
               <AlertCircle className="h-5 w-5" />
             </div>
           </CardContent>
         </Card>
 
         <Card className="bg-card text-card-foreground border-border shadow-sm">
-          <CardContent className="p-4 flex items-center justify-between">
+          <CardContent className="p-5 flex items-center justify-between">
             <div>
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                Pay Slips Generated
-              </p>
-              <h3 className="text-xl font-bold text-foreground mt-1">{metrics.count} Workers</h3>
+              <p className="text-xs font-medium text-muted-foreground">Active Roster</p>
+              <h2 className="text-xl font-bold text-foreground mt-1">
+                {metrics.totalEmployees} Workers
+              </h2>
+              <span className="text-[10px] text-muted-foreground mt-0.5 block">
+                Cutting, sewing & quality
+              </span>
             </div>
-            <div className="h-10 w-10 rounded-full bg-muted text-muted-foreground flex items-center justify-center">
+            <div className="h-10 w-10 rounded-full bg-secondary text-secondary-foreground flex items-center justify-center">
               <Banknote className="h-5 w-5" />
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Filter and Search Bar */}
       <div className="flex flex-col sm:flex-row gap-3 items-center justify-between">
         <div className="relative w-full sm:w-80">
           <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -234,118 +228,19 @@ export function PayrollListPage() {
         </div>
       </div>
 
-      {/* Table Card */}
-      <Card className="bg-card text-card-foreground border-border shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm text-left border-collapse">
-            <thead className="bg-muted/50 text-xs uppercase text-muted-foreground font-semibold border-b border-border">
-              <tr>
-                <th className="px-4 py-3">Employee</th>
-                <th className="px-4 py-3">Period</th>
-                <th className="px-4 py-3">Compensation</th>
-                <th className="px-4 py-3 text-right">Net Payable</th>
-                <th className="px-4 py-3 text-right">Paid</th>
-                <th className="px-4 py-3 text-right">Remaining</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {loading ? (
-                <tr>
-                  <td colSpan={8} className="px-4 py-12 text-center text-muted-foreground">
-                    Loading payroll records...
-                  </td>
-                </tr>
-              ) : filteredPayroll.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="px-4 py-12 text-center text-muted-foreground">
-                    No payroll records found matching your criteria.
-                  </td>
-                </tr>
-              ) : (
-                filteredPayroll.map((item) => (
-                  <tr key={item.id} className="hover:bg-muted/30 transition-colors">
-                    <td className="px-4 py-3 font-medium text-foreground">
-                      <div>{item.employeeName}</div>
-                      <div className="text-xs text-muted-foreground">{item.designation}</div>
-                    </td>
-                    <td className="px-4 py-3 text-muted-foreground font-mono text-xs">{item.period}</td>
-                    <td className="px-4 py-3">
-                      <span className="capitalize text-xs font-medium text-muted-foreground bg-muted px-2 py-0.5 rounded">
-                        {item.compensationMethod.replace('_', ' ')}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-right font-semibold text-foreground">
-                      {formatBDT(item.netPayable)}
-                    </td>
-                    <td className="px-4 py-3 text-right text-emerald-600 dark:text-emerald-400 font-medium">
-                      {formatBDT(item.paidAmount)}
-                    </td>
-                    <td className="px-4 py-3 text-right font-semibold">
-                      {item.remainingPayable > 0 ? (
-                        <span className="text-rose-600 dark:text-rose-400">
-                          {formatBDT(item.remainingPayable)}
-                        </span>
-                      ) : (
-                        <span className="text-muted-foreground text-xs">Cleared</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      {item.status === 'paid' && (
-                        <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20">
-                          Paid
-                        </Badge>
-                      )}
-                      {item.status === 'partial' && (
-                        <Badge className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20">
-                          Partial
-                        </Badge>
-                      )}
-                      {item.status === 'pending' && (
-                        <Badge className="bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20">
-                          Pending
-                        </Badge>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-right space-x-1 whitespace-nowrap">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 px-2 text-xs"
-                        onClick={() => setActivePayslip(item)}
-                      >
-                        <Eye className="h-3.5 w-3.5 mr-1" />
-                        Payslip
-                      </Button>
-                      {item.remainingPayable > 0 && (
-                        <Button
-                          variant="default"
-                          size="sm"
-                          className="h-8 px-2 text-xs bg-primary text-primary-foreground"
-                          onClick={() => setDisburseTarget(item)}
-                        >
-                          <Plus className="h-3 w-3 mr-1" />
-                          Pay
-                        </Button>
-                      )}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+      <PayrollTable
+        loading={loading}
+        filteredPayroll={filteredPayroll}
+        onViewPayslip={(record) => setActivePayslip(record)}
+        onDisburse={(record) => setDisburseTarget(record)}
+      />
 
-      {/* Extracted Payslip Dialog */}
       <PayslipDialog
         record={activePayslip}
         open={!!activePayslip}
         onOpenChange={(open) => !open && setActivePayslip(null)}
       />
 
-      {/* Extracted Disburse Dialog */}
       <DisbursePayrollDialog
         target={disburseTarget}
         open={!!disburseTarget}

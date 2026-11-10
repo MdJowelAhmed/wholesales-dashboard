@@ -1,7 +1,6 @@
 import React, { useState } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
 import { Scissors } from 'lucide-react'
 import {
   Dialog,
@@ -18,22 +17,11 @@ import { Employee } from '@/types/employees'
 import { ProductionOrder } from '@/types/production'
 import { formatBDT, calculateEmployeeWage } from '@/lib/calculations/financialCalculations'
 import { toast } from 'sonner'
-
-const entrySchema = z.object({
-  productionDate: z.string().min(1, 'Production date is required'),
-  orderCode: z.string().min(1, 'Select a production order'),
-  productId: z.string().min(1, 'Select a product'),
-  variantId: z.string().min(1, 'Select a size variant'),
-  employeeId: z.string().min(1, 'Select an operator/tailor'),
-  inputUnit: z.enum(['piece', 'dozen']),
-  inputQuantity: z.number().int().positive('Quantity must be at least 1'),
-  applicableWageRate: z.number().positive('Wage rate must be greater than 0'),
-  goodQuantityPieces: z.number().int().min(0, 'Good pieces cannot be negative'),
-  damagedQuantityPieces: z.number().int().min(0, 'Damaged pieces cannot be negative'),
-  notes: z.string().optional(),
-})
-
-type EntryFormData = z.infer<typeof entrySchema>
+import { getTodayDateString } from '@/lib/utils/date'
+import { entrySchema, type EntryFormData } from './productionOutputSchema'
+import { ProductionWageCalculationCard } from './ProductionWageCalculationCard'
+import { ProductionAssignmentSelectors } from './ProductionAssignmentSelectors'
+import { ProductionQuantityInputs } from './ProductionQuantityInputs'
 
 interface LogProductionOutputDialogProps {
   orders: ProductionOrder[]
@@ -68,7 +56,7 @@ export function LogProductionOutputDialog({
   } = useForm<EntryFormData>({
     resolver: zodResolver(entrySchema),
     defaultValues: {
-      productionDate: new Date().toISOString().split('T')[0],
+      productionDate: getTodayDateString(),
       orderCode: defaultOrder?.orderCode || 'PO-2026-BPS',
       productId: defaultProduct?.id || '',
       variantId: defaultVariant?.id || '',
@@ -150,11 +138,9 @@ export function LogProductionOutputDialog({
         notes: data.notes,
       })
 
-      toast.success('Production output logged', {
-        description: `Logged ${data.goodQuantityPieces} finished pieces. Wage earned: ${formatBDT(
-          estimatedWage
-        )}.`,
-      })
+      toast.success(
+        `Logged ${data.goodQuantityPieces} pcs. Wage earned: ${formatBDT(estimatedWage)}`
+      )
       reset()
       onOpenChange(false)
       onSuccess()
@@ -199,118 +185,19 @@ export function LogProductionOutputDialog({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <label className="text-xs font-semibold text-foreground">Garment Model *</label>
-              <select
-                value={selectedProductId}
-                onChange={handleProductChange}
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-              >
-                {products.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+          <ProductionAssignmentSelectors
+            products={products}
+            employees={employees}
+            selectedProduct={selectedProduct}
+            selectedProductId={selectedProductId}
+            onProductChange={handleProductChange}
+            onEmployeeChange={handleEmployeeChange}
+            register={register}
+          />
 
-            <div className="space-y-1">
-              <label className="text-xs font-semibold text-foreground">Size Variant *</label>
-              <select
-                {...register('variantId')}
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-              >
-                {selectedProduct?.variants.map((v) => (
-                  <option key={v.id} value={v.id}>
-                    Size {v.size} {v.color ? `(${v.color})` : ''}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
+          <ProductionQuantityInputs inputUnit={inputUnit} register={register} />
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <label className="text-xs font-semibold text-foreground">
-                Tailor / Operator *
-              </label>
-              <select
-                onChange={handleEmployeeChange}
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-              >
-                {employees.map((e) => (
-                  <option key={e.id} value={e.id}>
-                    {e.name} ({e.designation})
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-xs font-semibold text-foreground">Input Unit *</label>
-              <select
-                {...register('inputUnit')}
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-              >
-                <option value="piece">Per Piece</option>
-                <option value="dozen">Per Dozen (12 pcs)</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-3 gap-3">
-            <div className="space-y-1">
-              <label className="text-xs font-semibold text-foreground">
-                Input Qty ({inputUnit}) *
-              </label>
-              <Input
-                type="number"
-                placeholder="60"
-                {...register('inputQuantity', { valueAsNumber: true })}
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-xs font-semibold text-foreground">Good Pieces *</label>
-              <Input
-                type="number"
-                placeholder="60"
-                {...register('goodQuantityPieces', { valueAsNumber: true })}
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-xs font-semibold text-foreground">Damaged / Reject</label>
-              <Input
-                type="number"
-                placeholder="0"
-                {...register('damagedQuantityPieces', { valueAsNumber: true })}
-              />
-            </div>
-          </div>
-
-          <div className="space-y-1">
-            <label className="text-xs font-semibold text-foreground">
-              Applicable Wage Rate (৳ / {inputUnit}) *
-            </label>
-            <Input
-              type="number"
-              step="any"
-              placeholder="18"
-              {...register('applicableWageRate', { valueAsNumber: true })}
-            />
-          </div>
-
-          {/* Wage calculation live summary */}
-          <div className="p-3 rounded-lg border border-border bg-muted/20 flex items-center justify-between text-xs">
-            <span className="text-muted-foreground font-medium">
-              Calculated Wage (Good Output):
-            </span>
-            <span className="font-bold font-mono text-primary text-sm">
-              {formatBDT(estimatedWage)}
-            </span>
-          </div>
+          <ProductionWageCalculationCard estimatedWage={estimatedWage} />
 
           <div className="space-y-1">
             <label className="text-xs font-semibold text-foreground">Notes / Batch Remarks</label>
@@ -318,12 +205,7 @@ export function LogProductionOutputDialog({
           </div>
 
           <DialogFooter className="pt-3">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-              disabled={loading}
-            >
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
               Cancel
             </Button>
             <Button type="submit" disabled={loading}>

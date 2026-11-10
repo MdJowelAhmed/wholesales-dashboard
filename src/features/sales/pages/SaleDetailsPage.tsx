@@ -1,4 +1,3 @@
-import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import {
   ArrowLeft,
@@ -14,33 +13,25 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { salesRepository } from '@/mocks/repositories/salesRepository'
+import { useRepositoryQuery } from '@/lib/hooks'
 import { Sale } from '@/types/sales'
 import { formatBDT } from '@/lib/calculations/financialCalculations'
+import { SaleInvoiceItemsList } from '../components/SaleInvoiceItemsList'
 
 export function SaleDetailsPage() {
   const { id } = useParams<{ id: string }>()
-  const [sale, setSale] = useState<Sale | null>(null)
-  const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    async function loadSale() {
-      if (!id) return
-      try {
-        setLoading(true)
-        const found = await salesRepository.getSaleById(id)
-        setSale(found)
-      } catch (err) {
-        console.error('Failed to load sale details', err)
-      } finally {
-        setLoading(false)
-      }
-    }
-    loadSale()
-  }, [id])
+  const { data: sale, loading } = useRepositoryQuery<Sale | null>(
+    async () => {
+      if (!id) return null
+      return salesRepository.getSaleById(id)
+    },
+    { deps: [id], initialData: null }
+  )
 
   if (loading) {
     return (
-      <div className="flex h-64 items-center justify-center text-muted-foreground">
+      <div className="flex h-64 items-center justify-center text-muted-foreground text-sm">
         Loading invoice details...
       </div>
     )
@@ -65,11 +56,10 @@ export function SaleDetailsPage() {
     )
   }
 
-  const totalPieces = sale.items.reduce((sum, item) => sum + item.quantityPieces, 0)
+  const totalPieces = sale.items?.reduce((sum, item) => sum + (item.quantityPieces ?? 0), 0) ?? 0
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
-      {/* Top action bar */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <Link to="/sales">
           <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
@@ -90,7 +80,6 @@ export function SaleDetailsPage() {
         </div>
       </div>
 
-      {/* Invoice Document Card */}
       <Card className="border-border bg-card shadow-sm print:border-none print:shadow-none">
         <CardHeader className="border-b border-border p-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -132,7 +121,6 @@ export function SaleDetailsPage() {
         </CardHeader>
 
         <CardContent className="p-6 space-y-6">
-          {/* Party and Transaction Info */}
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
             <div className="rounded-lg border border-border bg-muted/20 p-4 space-y-2">
               <span className="text-xs font-semibold uppercase text-muted-foreground flex items-center gap-1.5">
@@ -184,52 +172,8 @@ export function SaleDetailsPage() {
             </div>
           </div>
 
-          {/* Line Items Table */}
-          <div className="rounded-lg border border-border overflow-hidden">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-muted/50 text-xs uppercase text-muted-foreground">
-                <tr>
-                  <th className="px-4 py-3">Sl</th>
-                  <th className="px-4 py-3">Product / SKU</th>
-                  <th className="px-4 py-3">Size</th>
-                  <th className="px-4 py-3 text-right">Quantity (Pcs)</th>
-                  <th className="px-4 py-3 text-right">Rate / Pc</th>
-                  <th className="px-4 py-3 text-right">Discount</th>
-                  <th className="px-4 py-3 text-right">Line Total</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {sale.items.map((item, idx) => (
-                  <tr key={item.id} className="hover:bg-muted/20">
-                    <td className="px-4 py-3 text-muted-foreground text-xs">{idx + 1}</td>
-                    <td className="px-4 py-3">
-                      <div className="font-medium text-foreground">{item.productName}</div>
-                      <div className="text-xs text-muted-foreground font-mono">{item.sku}</div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <Badge variant="outline" className="text-xs">
-                        Size {item.size}
-                      </Badge>
-                    </td>
-                    <td className="px-4 py-3 text-right font-medium text-foreground">
-                      {item.quantityPieces} pcs
-                    </td>
-                    <td className="px-4 py-3 text-right text-muted-foreground">
-                      ৳{item.pricePerPiece}
-                    </td>
-                    <td className="px-4 py-3 text-right text-muted-foreground">
-                      {item.discount ? formatBDT(item.discount) : '-'}
-                    </td>
-                    <td className="px-4 py-3 text-right font-semibold text-foreground">
-                      {formatBDT(item.lineTotal)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <SaleInvoiceItemsList items={sale.items} />
 
-          {/* Financial Calculation Summary */}
           <div className="flex justify-end">
             <div className="w-full max-w-sm space-y-2 rounded-lg border border-border bg-muted/10 p-4 text-sm">
               <div className="flex justify-between text-muted-foreground">

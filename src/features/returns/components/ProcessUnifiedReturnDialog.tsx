@@ -1,7 +1,6 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
 import { RotateCcw } from 'lucide-react'
 import {
   Dialog,
@@ -16,17 +15,9 @@ import { shopkeepersRepository } from '@/mocks/repositories/shopkeepersRepositor
 import { Shopkeeper, ShopkeeperDelivery, ShopkeeperDeliveryItem } from '@/types/shopkeepers'
 import { toast } from 'sonner'
 import { formatBDT, calculateReturnCredit } from '@/lib/calculations/financialCalculations'
-
-const returnSchema = z.object({
-  shopkeeperId: z.string().min(1, 'Please select a shopkeeper'),
-  deliveryId: z.string().min(1, 'Please select a delivery challan'),
-  variantId: z.string().min(1, 'Please select an item to return'),
-  returnQuantityPieces: z.number().int().positive('Return quantity must be at least 1 piece'),
-  condition: z.enum(['sellable', 'damaged']),
-  reason: z.string().min(3, 'Please provide a reason for the return'),
-})
-
-type ReturnFormData = z.infer<typeof returnSchema>
+import { returnSchema, type ReturnFormData } from './returnSchema'
+import { ReturnCreditSummaryCard } from './ReturnCreditSummaryCard'
+import { ReturnSourceSelectors } from './ReturnSourceSelectors'
 
 interface ProcessUnifiedReturnDialogProps {
   open: boolean
@@ -62,6 +53,27 @@ export function ProcessUnifiedReturnDialog({
     },
   })
 
+  const loadDeliveriesForShopkeeper = useCallback(
+    async (skId: string) => {
+      try {
+        const dList = await shopkeepersRepository.getDeliveries(skId)
+        setDeliveries(dList)
+        if (dList.length > 0) {
+          setValue('deliveryId', dList[0].id)
+          if (dList[0].items.length > 0) {
+            setValue('variantId', dList[0].items[0].variantId)
+          }
+        } else {
+          setValue('deliveryId', '')
+          setValue('variantId', '')
+        }
+      } catch (err) {
+        console.error('Failed to load deliveries for shopkeeper', err)
+      }
+    },
+    [setValue]
+  )
+
   // Load shopkeepers on open
   useEffect(() => {
     async function loadShopkeepers() {
@@ -79,25 +91,7 @@ export function ProcessUnifiedReturnDialog({
     if (open) {
       loadShopkeepers()
     }
-  }, [open, setValue])
-
-  const loadDeliveriesForShopkeeper = async (skId: string) => {
-    try {
-      const dList = await shopkeepersRepository.getDeliveries(skId)
-      setDeliveries(dList)
-      if (dList.length > 0) {
-        setValue('deliveryId', dList[0].id)
-        if (dList[0].items.length > 0) {
-          setValue('variantId', dList[0].items[0].variantId)
-        }
-      } else {
-        setValue('deliveryId', '')
-        setValue('variantId', '')
-      }
-    } catch (err) {
-      console.error('Failed to load deliveries for shopkeeper', err)
-    }
-  }
+  }, [open, setValue, loadDeliveriesForShopkeeper])
 
   const selectedShopkeeperId = useWatch({ control, name: 'shopkeeperId' })
   const selectedDeliveryId = useWatch({ control, name: 'deliveryId' })
@@ -109,6 +103,14 @@ export function ProcessUnifiedReturnDialog({
     const skId = e.target.value
     setValue('shopkeeperId', skId)
     loadDeliveriesForShopkeeper(skId)
+  }
+
+  const handleDeliveryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setValue('deliveryId', e.target.value)
+    const d = deliveries.find((del) => del.id === e.target.value)
+    if (d && d.items.length > 0) {
+      setValue('variantId', d.items[0].variantId)
+    }
   }
 
   const selectedDelivery = deliveries.find((d) => d.id === selectedDeliveryId)
@@ -128,9 +130,7 @@ export function ProcessUnifiedReturnDialog({
       setLoading(true)
 
       if (data.returnQuantityPieces > eligiblePieces) {
-        toast.error(
-          `Cannot return ${data.returnQuantityPieces} pcs. Only ${eligiblePieces} pcs eligible.`
-        )
+        toast.error(`Cannot return ${data.returnQuantityPieces} pcs. Only ${eligiblePieces} pcs eligible.`)
         return
       }
 
@@ -143,17 +143,13 @@ export function ProcessUnifiedReturnDialog({
         reason: data.reason,
       })
 
-      toast.success(
-        `Processed return of ${data.returnQuantityPieces} pcs (${data.condition}). Credit: ${formatBDT(
-          creditAmount
-        )}`
-      )
+      const formattedCredit = formatBDT(creditAmount)
+      toast.success(`Processed return of ${data.returnQuantityPieces} pcs (${data.condition}). Credit: ${formattedCredit}`)
       reset()
       onOpenChange(false)
       onSuccess()
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to record return'
-      toast.error(msg)
+      toast.error(err instanceof Error ? err.message : 'Failed to record return')
     } finally {
       setLoading(false)
     }
@@ -170,70 +166,16 @@ export function ProcessUnifiedReturnDialog({
         </DialogHeader>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 py-2">
-          {/* Shopkeeper Selection */}
-          <div className="space-y-1">
-            <label className="text-xs font-medium text-foreground">Shopkeeper / Partner *</label>
-            <select
-              value={selectedShopkeeperId}
-              onChange={handleShopkeeperChange}
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
-            >
-              {shopkeepers.map((sk) => (
-                <option key={sk.id} value={sk.id}>
-                  {sk.shopName} - {sk.marketName}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Delivery Selection */}
-          <div className="space-y-1">
-            <label className="text-xs font-medium text-foreground">Original Delivery Challan *</label>
-            <select
-              {...register('deliveryId')}
-              onChange={(e) => {
-                setValue('deliveryId', e.target.value)
-                const d = deliveries.find((del) => del.id === e.target.value)
-                if (d && d.items.length > 0) {
-                  setValue('variantId', d.items[0].variantId)
-                }
-              }}
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
-            >
-              {deliveries.length === 0 ? (
-                <option value="">No past deliveries found for this shopkeeper</option>
-              ) : (
-                deliveries.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.deliveryNumber} ({d.date}) - {d.transactionType.replace('_', ' ')} (
-                    {d.totalPieces} pcs)
-                  </option>
-                ))
-              )}
-            </select>
-            {errors.deliveryId && (
-              <p className="text-xs text-destructive">{errors.deliveryId.message}</p>
-            )}
-          </div>
-
-          {/* Item Selection from Delivery */}
-          <div className="space-y-1">
-            <label className="text-xs font-medium text-foreground">Garment Item / Size *</label>
-            <select
-              {...register('variantId')}
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
-            >
-              {deliveryItems.map((item) => (
-                <option key={item.variantId} value={item.variantId}>
-                  {item.productName} (Size {item.size}) - Delivered: {item.quantityPieces} pcs |
-                  Returned: {item.returnedPieces} pcs | Eligible: {item.quantityPieces - item.returnedPieces} pcs
-                </option>
-              ))}
-            </select>
-            {errors.variantId && (
-              <p className="text-xs text-destructive">{errors.variantId.message}</p>
-            )}
-          </div>
+          <ReturnSourceSelectors
+            shopkeepers={shopkeepers}
+            deliveries={deliveries}
+            deliveryItems={deliveryItems}
+            selectedShopkeeperId={selectedShopkeeperId}
+            onShopkeeperChange={handleShopkeeperChange}
+            onDeliveryChange={handleDeliveryChange}
+            register={register}
+            errors={errors}
+          />
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
@@ -268,23 +210,12 @@ export function ProcessUnifiedReturnDialog({
           </div>
 
           {/* Credit & Inventory summary */}
-          <div className="rounded-lg border border-border bg-muted/20 p-3 space-y-1.5 text-xs">
-            <div className="flex justify-between font-medium">
-              <span className="text-muted-foreground">Credit Adjustment to Ledger:</span>
-              <span className="text-foreground font-semibold">{formatBDT(creditAmount)}</span>
-            </div>
-            <div className="flex justify-between text-muted-foreground">
-              <span>Return Rate:</span>
-              <span>
-                {returnQuantityPieces} pcs @ ৳{selectedItem?.pricePerPiece || 0}/pc
-              </span>
-            </div>
-            <p className="text-[11px] text-muted-foreground italic">
-              {condition === 'sellable'
-                ? '✅ Sellable garments will be immediately added back to active warehouse finished goods inventory.'
-                : '⚠️ Damaged pieces are marked as defective and will NOT be added to sellable stock.'}
-            </p>
-          </div>
+          <ReturnCreditSummaryCard
+            creditAmount={creditAmount}
+            unitPrice={selectedItem?.pricePerPiece || 0}
+            returnQuantityPieces={returnQuantityPieces}
+            condition={condition}
+          />
 
           <div className="space-y-1">
             <label className="text-xs font-medium text-foreground">Reason for Return *</label>
@@ -298,12 +229,7 @@ export function ProcessUnifiedReturnDialog({
           </div>
 
           <DialogFooter className="pt-2">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-              disabled={loading}
-            >
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
               Cancel
             </Button>
             <Button

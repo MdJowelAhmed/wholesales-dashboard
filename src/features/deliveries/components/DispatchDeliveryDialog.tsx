@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
 import { Truck } from 'lucide-react'
 import {
   Dialog,
@@ -17,21 +16,11 @@ import { productsRepository } from '@/mocks/repositories/productsRepository'
 import { Product, ProductVariant } from '@/types/products'
 import { Shopkeeper } from '@/types/shopkeepers'
 import { toast } from 'sonner'
-import { formatBDT, calculateLineTotal } from '@/lib/calculations/financialCalculations'
-
-const dispatchSchema = z.object({
-  shopkeeperId: z.string().min(1, 'Please select a wholesale shopkeeper'),
-  date: z.string().min(1, 'Date is required'),
-  transactionType: z.enum(['credit_sale', 'consignment']),
-  productId: z.string().min(1, 'Select a product'),
-  variantId: z.string().min(1, 'Select a size variant'),
-  quantityPieces: z.number().int().positive('Quantity must be at least 1 piece'),
-  pricePerPiece: z.number().positive('Per-piece price must be greater than 0'),
-  paidAmount: z.number().min(0).optional(),
-  notes: z.string().optional(),
-})
-
-type DispatchFormData = z.infer<typeof dispatchSchema>
+import { calculateLineTotal } from '@/lib/calculations/financialCalculations'
+import { getTodayDateString } from '@/lib/utils/date'
+import { DeliveryItemValuationCard } from './DeliveryItemValuationCard'
+import { DeliveryProductItemFields } from './DeliveryProductItemFields'
+import { dispatchSchema, type DispatchFormData } from './deliverySchema'
 
 interface DispatchDeliveryDialogProps {
   shopkeepers: Shopkeeper[]
@@ -60,7 +49,7 @@ export function DispatchDeliveryDialog({
     resolver: zodResolver(dispatchSchema),
     defaultValues: {
       shopkeeperId: shopkeepers[0]?.id || '',
-      date: new Date().toISOString().split('T')[0],
+      date: getTodayDateString(),
       transactionType: 'credit_sale',
       productId: '',
       variantId: '',
@@ -144,17 +133,13 @@ export function DispatchDeliveryDialog({
         notes: data.notes,
       })
 
-      toast.success(
-        `Dispatched ${data.quantityPieces} pcs garments via ${
-          data.transactionType === 'consignment' ? 'Consignment' : 'Credit Sale'
-        }`
-      )
+      const txLabel = data.transactionType === 'consignment' ? 'Consignment' : 'Credit Sale'
+      toast.success(`Dispatched ${data.quantityPieces} pcs garments via ${txLabel}`)
       reset()
       onOpenChange(false)
       onSuccess()
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to record delivery'
-      toast.error(msg)
+      toast.error(err instanceof Error ? err.message : 'Failed to record delivery')
     } finally {
       setLoading(false)
     }
@@ -208,90 +193,23 @@ export function DispatchDeliveryDialog({
             </div>
           </div>
 
-          {/* Product & Variant */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-foreground">Garment Product *</label>
-              <select
-                value={selectedProductId}
-                onChange={handleProductChange}
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
-              >
-                {products.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-foreground">Size Variant *</label>
-              <select
-                {...register('variantId')}
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
-              >
-                {variants.map((v) => (
-                  <option key={v.id} value={v.id}>
-                    Size {v.size} ({v.color}) - {v.sku}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {/* Quantity in Pieces and Price per piece */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-foreground">
-                Quantity (Pieces) *
-              </label>
-              <Input
-                type="number"
-                min={1}
-                {...register('quantityPieces', { valueAsNumber: true })}
-                className="bg-background"
-              />
-              {errors.quantityPieces && (
-                <p className="text-xs text-destructive">{errors.quantityPieces.message}</p>
-              )}
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-foreground">
-                Price per Piece (৳) *
-              </label>
-              <Input
-                type="number"
-                step="0.01"
-                min={1}
-                {...register('pricePerPiece', { valueAsNumber: true })}
-                className="bg-background"
-              />
-              {errors.pricePerPiece && (
-                <p className="text-xs text-destructive">{errors.pricePerPiece.message}</p>
-              )}
-            </div>
-          </div>
+          <DeliveryProductItemFields
+            products={products}
+            variants={variants}
+            selectedProductId={selectedProductId}
+            onProductChange={handleProductChange}
+            register={register}
+            errors={errors}
+          />
 
           {/* Live Valuation calculation */}
-          <div className="rounded-lg border border-border bg-muted/20 p-3 space-y-1.5 text-xs">
-            <div className="flex justify-between font-medium">
-              <span className="text-muted-foreground">Delivery Total:</span>
-              <span className="text-foreground font-semibold">{formatBDT(lineTotal)}</span>
-            </div>
-            <div className="flex justify-between text-muted-foreground">
-              <span>Selected Item:</span>
-              <span>
-                {selectedProduct?.name} (Size {selectedVariant?.size}) • {quantityPieces} pcs
-              </span>
-            </div>
-            <p className="text-[11px] text-muted-foreground italic">
-              {transactionType === 'consignment'
-                ? 'ℹ️ Consignment pieces remain factory asset until sold; no debt is added immediately.'
-                : 'ℹ️ Credit sale is added directly to the shopkeeper ledger and accounts receivable balance.'}
-            </p>
-          </div>
+          <DeliveryItemValuationCard
+            lineTotal={lineTotal}
+            productName={selectedProduct?.name}
+            variantSize={selectedVariant?.size}
+            quantityPieces={quantityPieces}
+            transactionType={transactionType}
+          />
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
@@ -316,12 +234,7 @@ export function DispatchDeliveryDialog({
           </div>
 
           <DialogFooter className="pt-2">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-              disabled={loading}
-            >
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
               Cancel
             </Button>
             <Button type="submit" disabled={loading} className="bg-primary text-primary-foreground">

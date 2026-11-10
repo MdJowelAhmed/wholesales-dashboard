@@ -15,6 +15,7 @@ import { Input } from '@/components/ui/input'
 import { employeesRepository } from '@/mocks/repositories/employeesRepository'
 import { WageRateType } from '@/lib/calculations/financialCalculations'
 import { toast } from 'sonner'
+import { getTodayDateString } from '@/lib/utils/date'
 
 const employeeSchema = z.object({
   name: z.string().min(3, 'Employee name is required'),
@@ -29,6 +30,10 @@ const employeeSchema = z.object({
 })
 
 type EmployeeFormData = z.infer<typeof employeeSchema>
+
+function generateEmployeeCode(): string {
+  return `EMP-${Date.now().toString().slice(-4)}`
+}
 
 interface AddEmployeeDialogProps {
   open: boolean
@@ -53,7 +58,7 @@ export function AddEmployeeDialog({
     resolver: zodResolver(employeeSchema),
     defaultValues: {
       name: '',
-      employeeCode: `EMP-${Date.now().toString().slice(-4)}`,
+      employeeCode: generateEmployeeCode(),
       phone: '+880 1',
       address: 'Mirpur, Dhaka',
       designation: 'Sewing Machine Operator',
@@ -75,7 +80,7 @@ export function AddEmployeeDialog({
         phone: data.phone,
         address: data.address,
         designation: data.designation,
-        joiningDate: new Date().toISOString().split('T')[0],
+        joiningDate: getTodayDateString(),
         compensationMethod: data.compensationMethod as WageRateType,
         ratePerPiece: data.compensationMethod === 'piece' ? data.ratePerPiece : undefined,
         ratePerDozen: data.compensationMethod === 'dozen' ? data.ratePerDozen : undefined,

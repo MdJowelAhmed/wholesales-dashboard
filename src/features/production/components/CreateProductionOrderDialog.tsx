@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useMemo } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -15,6 +15,7 @@ import { Input } from '@/components/ui/input'
 import { productionRepository } from '@/mocks/repositories/productionRepository'
 import { Product } from '@/types/products'
 import { toast } from 'sonner'
+import { getTodayDateString, getFutureDateString } from '@/lib/utils/date'
 
 const orderSchema = z.object({
   productId: z.string().min(1, 'Select a finished garment model'),
@@ -42,6 +43,13 @@ export function CreateProductionOrderDialog({
 
   const defaultProduct = products[0]
 
+  const initialDates = useMemo(() => {
+    return {
+      startDate: getTodayDateString(),
+      dueDate: getFutureDateString(15),
+    }
+  }, [])
+
   const {
     register,
     handleSubmit,
@@ -52,8 +60,8 @@ export function CreateProductionOrderDialog({
     defaultValues: {
       productId: defaultProduct?.id || '',
       targetQuantityPieces: 500,
-      startDate: new Date().toISOString().split('T')[0],
-      dueDate: new Date(Date.now() + 15 * 86400000).toISOString().split('T')[0],
+      startDate: initialDates.startDate,
+      dueDate: initialDates.dueDate,
     },
   })
 
