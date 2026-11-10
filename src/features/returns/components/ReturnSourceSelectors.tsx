@@ -1,6 +1,7 @@
 import React from 'react'
 import { UseFormRegister, FieldErrors } from 'react-hook-form'
 import { Shopkeeper, ShopkeeperDelivery, ShopkeeperDeliveryItem } from '@/types/shopkeepers'
+import { ReturnFormData } from './returnSchema'
 
 interface ReturnSourceSelectorsProps {
   shopkeepers: Shopkeeper[]
@@ -9,10 +10,8 @@ interface ReturnSourceSelectorsProps {
   selectedShopkeeperId: string
   onShopkeeperChange: (e: React.ChangeEvent<HTMLSelectElement>) => void
   onDeliveryChange: (e: React.ChangeEvent<HTMLSelectElement>) => void
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  register: UseFormRegister<any>
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  errors: FieldErrors<any>
+  register: UseFormRegister<ReturnFormData>
+  errors: FieldErrors<ReturnFormData>
 }
 
 export function ReturnSourceSelectors({
@@ -63,7 +62,7 @@ export function ReturnSourceSelectors({
           )}
         </select>
         {errors.deliveryId && (
-          <p className="text-xs text-destructive">{errors.deliveryId.message as string}</p>
+          <p className="text-xs text-destructive">{errors.deliveryId.message}</p>
         )}
       </div>
 
@@ -82,7 +81,7 @@ export function ReturnSourceSelectors({
           ))}
         </select>
         {errors.variantId && (
-          <p className="text-xs text-destructive">{errors.variantId.message as string}</p>
+          <p className="text-xs text-destructive">{errors.variantId.message}</p>
         )}
       </div>
     </>

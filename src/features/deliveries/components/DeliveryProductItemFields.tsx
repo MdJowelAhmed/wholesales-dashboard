@@ -2,16 +2,15 @@ import React from 'react'
 import { UseFormRegister, FieldErrors } from 'react-hook-form'
 import { Input } from '@/components/ui/input'
 import { Product, ProductVariant } from '@/types/products'
+import { DispatchFormData } from './deliverySchema'
 
 interface DeliveryProductItemFieldsProps {
   products: Product[]
   variants: ProductVariant[]
   selectedProductId: string
   onProductChange: (e: React.ChangeEvent<HTMLSelectElement>) => void
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  register: UseFormRegister<any>
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  errors: FieldErrors<any>
+  register: UseFormRegister<DispatchFormData>
+  errors: FieldErrors<DispatchFormData>
 }
 
 export function DeliveryProductItemFields({
@@ -69,7 +68,7 @@ export function DeliveryProductItemFields({
             className="bg-background"
           />
           {errors.quantityPieces && (
-            <p className="text-xs text-destructive">{errors.quantityPieces.message as string}</p>
+            <p className="text-xs text-destructive">{errors.quantityPieces.message}</p>
           )}
         </div>
 
@@ -85,7 +84,7 @@ export function DeliveryProductItemFields({
             className="bg-background"
           />
           {errors.pricePerPiece && (
-            <p className="text-xs text-destructive">{errors.pricePerPiece.message as string}</p>
+            <p className="text-xs text-destructive">{errors.pricePerPiece.message}</p>
           )}
         </div>
       </div>
