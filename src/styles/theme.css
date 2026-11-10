@@ -1,0 +1,133 @@
+:root {
+  --background: 210 40% 98%;
+  --foreground: 222.2 84% 4.9%;
+
+  --card: 0 0% 100%;
+  --card-foreground: 222.2 84% 4.9%;
+
+  --popover: 0 0% 100%;
+  --popover-foreground: 222.2 84% 4.9%;
+
+  --primary: 221.2 83.2% 53.3%;
+  --primary-foreground: 210 40% 98%;
+
+  --secondary: 210 40% 96.1%;
+  --secondary-foreground: 222.2 47.4% 11.2%;
+
+  --muted: 210 40% 96.1%;
+  --muted-foreground: 215.4 16.3% 46.9%;
+
+  --accent: 210 40% 96.1%;
+  --accent-foreground: 222.2 47.4% 11.2%;
+
+  --destructive: 0 84.2% 60.2%;
+  --destructive-foreground: 210 40% 98%;
+
+  --border: 214.3 31.8% 91.4%;
+  --input: 214.3 31.8% 91.4%;
+  --ring: 221.2 83.2% 53.3%;
+
+  --radius: 0.5rem;
+
+  /* Centralized Status Tokens (Light) */
+  --status-paid: 142.1 76.2% 36.3%;
+  --status-paid-foreground: 142.1 76.2% 20%;
+  --status-paid-border: 142.1 70.6% 85%;
+
+  --status-pending: 38 92% 50%;
+  --status-pending-foreground: 38 92% 25%;
+  --status-pending-border: 48 96% 89%;
+
+  --status-overdue: 0 84.2% 60.2%;
+  --status-overdue-foreground: 0 74% 30%;
+  --status-overdue-border: 0 90% 90%;
+
+  --status-active: 160 84% 39%;
+  --status-active-foreground: 160 84% 20%;
+  --status-active-border: 160 84% 85%;
+
+  --status-inactive: 215.4 16.3% 46.9%;
+  --status-inactive-foreground: 215.4 16.3% 25%;
+  --status-inactive-border: 215 20% 88%;
+
+  --status-approved: 221.2 83.2% 53.3%;
+  --status-approved-foreground: 221.2 83.2% 25%;
+  --status-approved-border: 221 80% 90%;
+
+  --status-rejected: 0 84.2% 60.2%;
+  --status-rejected-foreground: 0 84.2% 25%;
+  --status-rejected-border: 0 90% 90%;
+
+  /* Centralized Chart Tokens */
+  --chart-1: 221.2 83.2% 53.3%;
+  --chart-2: 160 84% 39%;
+  --chart-3: 38 92% 50%;
+  --chart-4: 262.1 83.3% 57.8%;
+  --chart-5: 12 76% 61%;
+}
+
+.dark {
+  --background: 224 71% 4%;
+  --foreground: 213 31% 91%;
+
+  --card: 224 71% 7%;
+  --card-foreground: 213 31% 91%;
+
+  --popover: 224 71% 7%;
+  --popover-foreground: 213 31% 91%;
+
+  --primary: 217.2 91.2% 59.8%;
+  --primary-foreground: 222.2 47.4% 11.2%;
+
+  --secondary: 222.2 47.4% 13%;
+  --secondary-foreground: 210 40% 98%;
+
+  --muted: 223 47% 11%;
+  --muted-foreground: 215.4 16.3% 56.9%;
+
+  --accent: 222.2 47.4% 13%;
+  --accent-foreground: 210 40% 98%;
+
+  --destructive: 0 62.8% 40%;
+  --destructive-foreground: 210 40% 98%;
+
+  --border: 216 34% 17%;
+  --input: 216 34% 17%;
+  --ring: 217.2 91.2% 59.8%;
+
+  /* Centralized Status Tokens (Dark) */
+  --status-paid: 142.1 70.6% 45.3%;
+  --status-paid-foreground: 142.1 76.2% 85%;
+  --status-paid-border: 142.1 70.6% 25%;
+
+  --status-pending: 38 92% 55%;
+  --status-pending-foreground: 48 96% 89%;
+  --status-pending-border: 38 92% 25%;
+
+  --status-overdue: 0 84.2% 65%;
+  --status-overdue-foreground: 0 90% 90%;
+  --status-overdue-border: 0 84.2% 25%;
+
+  --status-active: 160 84% 45%;
+  --status-active-foreground: 160 84% 85%;
+  --status-active-border: 160 84% 22%;
+
+  --status-inactive: 215.4 16.3% 60%;
+  --status-inactive-foreground: 215 20% 88%;
+  --status-inactive-border: 215.4 16.3% 25%;
+
+  --status-approved: 217.2 91.2% 59.8%;
+  --status-approved-foreground: 221 80% 90%;
+  --status-approved-border: 217.2 91.2% 25%;
+
+  --status-rejected: 0 84.2% 65%;
+  --status-rejected-foreground: 0 90% 90%;
+  --status-rejected-border: 0 84.2% 25%;
+
+  /* Centralized Chart Tokens (Dark) */
+  --chart-1: 217.2 91.2% 59.8%;
+  --chart-2: 160 84% 45%;
+  --chart-3: 38 92% 55%;
+  --chart-4: 262.1 83.3% 65%;
+  --chart-5: 12 76% 68%;
+}
