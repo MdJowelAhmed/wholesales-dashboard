@@ -8,10 +8,10 @@ import { Sale } from '@/types/sales'
 import { formatBDT } from '@/lib/calculations/financialCalculations'
 
 interface RecentSalesTableProps {
-  sales: Sale[]
+  sales?: Sale[]
 }
 
-export function RecentSalesTable({ sales }: RecentSalesTableProps): React.JSX.Element {
+export function RecentSalesTable({ sales = [] }: RecentSalesTableProps): React.JSX.Element {
   return (
     <Card className="lg:col-span-2">
       <CardHeader className="flex flex-row items-center justify-between pb-3">
@@ -20,7 +20,7 @@ export function RecentSalesTable({ sales }: RecentSalesTableProps): React.JSX.El
           <CardDescription>Latest customer invoices and delivery billing</CardDescription>
         </div>
         <Button variant="ghost" size="sm" asChild>
-          <Link to="/customers" className="flex items-center gap-1 text-xs">
+          <Link to="/sales" className="flex items-center gap-1 text-xs">
             View All <ArrowRight className="h-3.5 w-3.5 ml-1" />
           </Link>
         </Button>
@@ -40,7 +40,7 @@ export function RecentSalesTable({ sales }: RecentSalesTableProps): React.JSX.El
             </thead>
             <tbody className="divide-y divide-border">
               {sales.map((sale) => {
-                const totalPieces = sale.items.reduce((s, i) => s + i.quantityPieces, 0)
+                const totalPieces = sale.items?.reduce((s, i) => s + (i.quantityPieces ?? 0), 0) ?? 0
                 return (
                   <tr key={sale.id} className="hover:bg-muted/40 transition-colors">
                     <td className="py-3 font-medium text-foreground">{sale.invoiceNumber}</td>
@@ -48,11 +48,11 @@ export function RecentSalesTable({ sales }: RecentSalesTableProps): React.JSX.El
                     <td className="py-3 text-right text-foreground font-mono">
                       {totalPieces} pcs
                     </td>
-                    <td className="py-3 text-right font-medium text-foreground">
-                      {formatBDT(sale.totalAmount)}
+                    <td className="py-3 text-right font-mono font-medium text-foreground">
+                      {formatBDT(sale.totalAmount ?? 0)}
                     </td>
-                    <td className="py-3 text-right font-medium text-muted-foreground">
-                      {formatBDT(sale.outstandingBalance)}
+                    <td className="py-3 text-right font-mono font-bold text-destructive">
+                      {formatBDT(sale.outstandingBalance ?? 0)}
                     </td>
                     <td className="py-3 text-center">
                       <StatusBadge status={sale.status} />
@@ -67,4 +67,3 @@ export function RecentSalesTable({ sales }: RecentSalesTableProps): React.JSX.El
     </Card>
   )
 }
-

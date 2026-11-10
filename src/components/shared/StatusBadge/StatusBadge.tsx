@@ -12,13 +12,13 @@ export type StandardStatus =
   | 'partial'
 
 interface StatusBadgeProps {
-  status: StandardStatus | string
+  status?: StandardStatus | string | null
   label?: string
   className?: string
 }
 
 export function StatusBadge({ status, label, className }: StatusBadgeProps): React.JSX.Element {
-  const normalized = status.toLowerCase()
+  const normalized = (status ?? '').toLowerCase()
 
   switch (normalized) {
     case 'paid':
@@ -42,6 +42,6 @@ export function StatusBadge({ status, label, className }: StatusBadgeProps): Rea
     case 'rejected':
       return <Badge variant="rejected" className={className}>{label || 'Rejected'}</Badge>
     default:
-      return <Badge variant="outline" className={className}>{label || status}</Badge>
+      return <Badge variant="outline" className={className}>{label || status || '—'}</Badge>
   }
 }

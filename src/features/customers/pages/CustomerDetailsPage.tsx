@@ -1,50 +1,52 @@
-import React, { useEffect, useState } from 'react'
+import React, { useState, useTransition } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { ArrowLeft, DollarSign, Phone, MapPin, UserCheck } from 'lucide-react'
 import { PageHeader } from '@/components/shared/PageHeader/PageHeader'
 import { SummaryCard } from '@/components/shared/SummaryCard/SummaryCard'
 import { StatusBadge } from '@/components/shared/StatusBadge/StatusBadge'
 import { PrintButton } from '@/components/shared/PrintButton/PrintButton'
-import { LoadingState, EmptyState } from '@/components/shared/StateFeedbacks'
+import { EmptyState, TableSkeleton, CardGridSkeleton } from '@/components/shared/StateFeedbacks'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { salesRepository } from '@/mocks/repositories/salesRepository'
-import { mockStorage } from '@/mocks/storage/localStorageAdapter'
+import { useRepositoryQuery } from '@/lib/hooks'
 import { Customer, CustomerLedgerEntry } from '@/types/sales'
 import { RecordCustomerPaymentDialog } from '../components/RecordCustomerPaymentDialog'
 import { formatBDT } from '@/lib/calculations/financialCalculations'
 
 export function CustomerDetailsPage(): React.JSX.Element {
   const { id } = useParams<{ id: string }>()
-  const [customer, setCustomer] = useState<Customer | null>(null)
-  const [ledger, setLedger] = useState<CustomerLedgerEntry[]>([])
-  const [loading, setLoading] = useState(true)
   const [paymentOpen, setPaymentOpen] = useState(false)
+  const [, startTransition] = useTransition()
 
-  const loadData = async () => {
-    if (!id) return
-    try {
-      const [c, l] = await Promise.all([
+  const { data, loading, refetch } = useRepositoryQuery(
+    async () => {
+      if (!id) return { customer: null as Customer | null, ledger: [] as CustomerLedgerEntry[] }
+      const [customer, ledger] = await Promise.all([
         salesRepository.getCustomerById(id),
         salesRepository.getCustomerLedger(id),
       ])
-      setCustomer(c)
-      setLedger(l)
-    } finally {
-      setLoading(false)
-    }
+      return { customer, ledger }
+    },
+    { deps: [id], initialData: { customer: null, ledger: [] } }
+  )
+
+  const { customer, ledger } = data
+
+  const handleRefetch = () => {
+    startTransition(() => {
+      refetch()
+    })
   }
 
-  useEffect(() => {
-    loadData()
-    const unsubscribe = mockStorage.subscribe(() => {
-      loadData()
-    })
-    return () => unsubscribe()
-  }, [id])
-
   if (loading) {
-    return <LoadingState message="Loading boutique customer ledger..." />
+    return (
+      <div className="space-y-6">
+        <div className="h-8 w-32 bg-muted/50 rounded animate-pulse" />
+        <CardGridSkeleton count={3} />
+        <TableSkeleton rows={5} cols={7} />
+      </div>
+    )
   }
 
   if (!customer) {
@@ -200,7 +202,7 @@ export function CustomerDetailsPage(): React.JSX.Element {
         outstandingBalance={customer.outstandingBalance}
         open={paymentOpen}
         onOpenChange={setPaymentOpen}
-        onSuccess={loadData}
+        onSuccess={handleRefetch}
       />
     </div>
   )

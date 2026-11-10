@@ -1,15 +1,15 @@
-import React, { useEffect, useState } from 'react'
+import React, { useState, useTransition } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { ArrowLeft, DollarSign, Banknote, Phone, MapPin, Calendar, Award } from 'lucide-react'
 import { PageHeader } from '@/components/shared/PageHeader/PageHeader'
 import { SummaryCard } from '@/components/shared/SummaryCard/SummaryCard'
 import { StatusBadge } from '@/components/shared/StatusBadge/StatusBadge'
 import { PrintButton } from '@/components/shared/PrintButton/PrintButton'
-import { LoadingState, EmptyState } from '@/components/shared/StateFeedbacks'
+import { EmptyState, TableSkeleton, CardGridSkeleton } from '@/components/shared/StateFeedbacks'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { employeesRepository } from '@/mocks/repositories/employeesRepository'
-import { mockStorage } from '@/mocks/storage/localStorageAdapter'
+import { useRepositoryQuery } from '@/lib/hooks'
 import { Employee, EmployeeLedgerEntry } from '@/types/employees'
 import { RecordAdvanceDialog } from '../components/RecordAdvanceDialog'
 import { RecordSalaryPaymentDialog } from '../components/RecordSalaryPaymentDialog'
@@ -17,36 +17,38 @@ import { formatBDT } from '@/lib/calculations/financialCalculations'
 
 export function EmployeeDetailsPage(): React.JSX.Element {
   const { id } = useParams<{ id: string }>()
-  const [employee, setEmployee] = useState<Employee | null>(null)
-  const [ledger, setLedger] = useState<EmployeeLedgerEntry[]>([])
-  const [loading, setLoading] = useState(true)
   const [advanceOpen, setAdvanceOpen] = useState(false)
   const [paymentOpen, setPaymentOpen] = useState(false)
+  const [, startTransition] = useTransition()
 
-  const loadData = async () => {
-    if (!id) return
-    try {
-      const [e, l] = await Promise.all([
+  const { data, loading, refetch } = useRepositoryQuery(
+    async () => {
+      if (!id) return { employee: null as Employee | null, ledger: [] as EmployeeLedgerEntry[] }
+      const [employee, ledger] = await Promise.all([
         employeesRepository.getEmployeeById(id),
         employeesRepository.getEmployeeLedger(id),
       ])
-      setEmployee(e)
-      setLedger(l)
-    } finally {
-      setLoading(false)
-    }
+      return { employee, ledger }
+    },
+    { deps: [id], initialData: { employee: null, ledger: [] } }
+  )
+
+  const { employee, ledger } = data
+
+  const handleRefetch = () => {
+    startTransition(() => {
+      refetch()
+    })
   }
 
-  useEffect(() => {
-    loadData()
-    const unsubscribe = mockStorage.subscribe(() => {
-      loadData()
-    })
-    return () => unsubscribe()
-  }, [id])
-
   if (loading) {
-    return <LoadingState message="Loading worker wage ledger and profile..." />
+    return (
+      <div className="space-y-6">
+        <div className="h-8 w-32 bg-muted/50 rounded animate-pulse" />
+        <CardGridSkeleton count={4} />
+        <TableSkeleton rows={5} cols={6} />
+      </div>
+    )
   }
 
   if (!employee) {
@@ -242,7 +244,7 @@ export function EmployeeDetailsPage(): React.JSX.Element {
         employeeName={employee.name}
         open={advanceOpen}
         onOpenChange={setAdvanceOpen}
-        onSuccess={loadData}
+        onSuccess={handleRefetch}
       />
 
       <RecordSalaryPaymentDialog
@@ -251,7 +253,7 @@ export function EmployeeDetailsPage(): React.JSX.Element {
         currentPayableBalance={employee.currentPayableBalance}
         open={paymentOpen}
         onOpenChange={setPaymentOpen}
-        onSuccess={loadData}
+        onSuccess={handleRefetch}
       />
     </div>
   )

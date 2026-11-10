@@ -7,10 +7,10 @@ import { Shopkeeper } from '@/types/shopkeepers'
 import { formatBDT } from '@/lib/calculations/financialCalculations'
 
 interface TopShopkeepersCardProps {
-  shopkeepers: Shopkeeper[]
+  shopkeepers?: Shopkeeper[]
 }
 
-export function TopShopkeepersCard({ shopkeepers }: TopShopkeepersCardProps): React.JSX.Element {
+export function TopShopkeepersCard({ shopkeepers = [] }: TopShopkeepersCardProps): React.JSX.Element {
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between pb-3">
@@ -51,4 +51,3 @@ export function TopShopkeepersCard({ shopkeepers }: TopShopkeepersCardProps): Re
     </Card>
   )
 }
-

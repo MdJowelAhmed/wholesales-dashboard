@@ -1,14 +1,14 @@
-import React, { useEffect, useState, useMemo } from 'react'
+import React, { useState, useMemo, useTransition } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Plus, Users, Eye, DollarSign, Banknote } from 'lucide-react'
 import { PageHeader } from '@/components/shared/PageHeader/PageHeader'
 import { SummaryCard } from '@/components/shared/SummaryCard/SummaryCard'
 import { StatusBadge } from '@/components/shared/StatusBadge/StatusBadge'
 import { DataTable, ColumnDef } from '@/components/shared/DataTable/DataTable'
-import { LoadingState } from '@/components/shared/StateFeedbacks'
+import { TableSkeleton, CardGridSkeleton } from '@/components/shared/StateFeedbacks'
 import { Button } from '@/components/ui/button'
 import { employeesRepository } from '@/mocks/repositories/employeesRepository'
-import { mockStorage } from '@/mocks/storage/localStorageAdapter'
+import { useRepositoryQuery } from '@/lib/hooks'
 import { Employee } from '@/types/employees'
 import { AddEmployeeDialog } from '../components/AddEmployeeDialog'
 import { RecordAdvanceDialog } from '../components/RecordAdvanceDialog'
@@ -16,38 +16,30 @@ import { RecordSalaryPaymentDialog } from '../components/RecordSalaryPaymentDial
 import { formatBDT } from '@/lib/calculations/financialCalculations'
 
 export function EmployeesListPage(): React.JSX.Element {
-  const [employees, setEmployees] = useState<Employee[]>([])
-  const [loading, setLoading] = useState(true)
+  const { data: employees = [], loading, refetch } = useRepositoryQuery(
+    () => employeesRepository.listEmployees(),
+    { initialData: [] }
+  )
   const [addDialogOpen, setAddDialogOpen] = useState(false)
   const [compensationFilter, setCompensationFilter] = useState('all')
   const [advanceEmp, setAdvanceEmp] = useState<Employee | null>(null)
   const [payEmp, setPayEmp] = useState<Employee | null>(null)
   const navigate = useNavigate()
+  const [, startTransition] = useTransition()
 
-  const loadEmployees = async () => {
-    try {
-      const data = await employeesRepository.listEmployees()
-      setEmployees(data)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    loadEmployees()
-    const unsubscribe = mockStorage.subscribe(() => {
-      loadEmployees()
+  const handleRefetch = () => {
+    startTransition(() => {
+      refetch()
     })
-    return () => unsubscribe()
-  }, [])
+  }
 
   const filtered = useMemo(() => {
     if (compensationFilter === 'all') return employees
     return employees.filter((e) => e.compensationMethod === compensationFilter)
   }, [employees, compensationFilter])
 
-  const totalLiabilities = employees.reduce((sum, e) => sum + e.currentPayableBalance, 0)
-  const totalEarned = employees.reduce((sum, e) => sum + e.totalEarnedWages, 0)
+  const totalLiabilities = employees.reduce((sum, e) => sum + (e.currentPayableBalance ?? 0), 0)
+  const totalEarned = employees.reduce((sum, e) => sum + (e.totalEarnedWages ?? 0), 0)
 
   const formatCompensation = (emp: Employee) => {
     switch (emp.compensationMethod) {
@@ -171,10 +163,6 @@ export function EmployeesListPage(): React.JSX.Element {
     },
   ]
 
-  if (loading) {
-    return <LoadingState message="Loading factory employee & tailor roster..." />
-  }
-
   return (
     <div className="space-y-6">
       <PageHeader
@@ -188,53 +176,62 @@ export function EmployeesListPage(): React.JSX.Element {
         }
       />
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <SummaryCard
-          title="Wage Liabilities"
-          value={formatBDT(totalLiabilities)}
-          subtitle="Accrued wages & salaries payable"
-          icon={Banknote}
-        />
-        <SummaryCard
-          title="Total Wages Earned"
-          value={formatBDT(totalEarned)}
-          subtitle="Cumulative piece rate & monthly wages"
-          icon={DollarSign}
-        />
-        <SummaryCard
-          title="Active Workforce"
-          value={`${employees.length} Workers`}
-          subtitle="Cutting, sewing & finishing floor"
-          icon={Users}
-        />
-      </div>
+      {loading ? (
+        <>
+          <CardGridSkeleton count={3} />
+          <TableSkeleton rows={5} cols={6} />
+        </>
+      ) : (
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <SummaryCard
+              title="Wage Liabilities"
+              value={formatBDT(totalLiabilities)}
+              subtitle="Accrued wages & salaries payable"
+              icon={Banknote}
+            />
+            <SummaryCard
+              title="Total Wages Earned"
+              value={formatBDT(totalEarned)}
+              subtitle="Cumulative piece rate & monthly wages"
+              icon={DollarSign}
+            />
+            <SummaryCard
+              title="Active Workforce"
+              value={`${employees.length} Workers`}
+              subtitle="Cutting, sewing & finishing floor"
+              icon={Users}
+            />
+          </div>
 
-      <DataTable
-        data={filtered}
-        columns={columns}
-        searchKey={(e) => `${e.name} ${e.employeeCode} ${e.designation} ${e.phone}`}
-        searchPlaceholder="Search employee name, code, designation, or phone..."
-        filterNode={
-          <select
-            value={compensationFilter}
-            onChange={(e) => setCompensationFilter(e.target.value)}
-            className="h-9 rounded-md border border-input bg-background px-3 py-1 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-          >
-            <option value="all">All Compensation Types</option>
-            <option value="piece">Per-Piece Rate</option>
-            <option value="dozen">Per-Dozen Rate</option>
-            <option value="monthly_fixed">Fixed Monthly Salary</option>
-            <option value="monthly_plus_incentive">Monthly + Incentive</option>
-          </select>
-        }
-        emptyTitle="No employees found"
-        emptyDescription="Register cutters or sewing machine operators to track wages."
-      />
+          <DataTable
+            data={filtered}
+            columns={columns}
+            searchKey={(e) => `${e.name} ${e.employeeCode} ${e.designation} ${e.phone}`}
+            searchPlaceholder="Search employee name, code, designation, or phone..."
+            filterNode={
+              <select
+                value={compensationFilter}
+                onChange={(e) => setCompensationFilter(e.target.value)}
+                className="h-9 rounded-md border border-input bg-background px-3 py-1 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              >
+                <option value="all">All Compensation Types</option>
+                <option value="piece">Per-Piece Rate</option>
+                <option value="dozen">Per-Dozen Rate</option>
+                <option value="monthly_fixed">Fixed Monthly Salary</option>
+                <option value="monthly_plus_incentive">Monthly + Incentive</option>
+              </select>
+            }
+            emptyTitle="No employees found"
+            emptyDescription="Register cutters or sewing machine operators to track wages."
+          />
+        </>
+      )}
 
       <AddEmployeeDialog
         open={addDialogOpen}
         onOpenChange={setAddDialogOpen}
-        onSuccess={loadEmployees}
+        onSuccess={handleRefetch}
       />
 
       {advanceEmp && (
@@ -243,7 +240,7 @@ export function EmployeesListPage(): React.JSX.Element {
           employeeName={advanceEmp.name}
           open={!!advanceEmp}
           onOpenChange={(open) => !open && setAdvanceEmp(null)}
-          onSuccess={loadEmployees}
+          onSuccess={handleRefetch}
         />
       )}
 
@@ -254,7 +251,7 @@ export function EmployeesListPage(): React.JSX.Element {
           currentPayableBalance={payEmp.currentPayableBalance}
           open={!!payEmp}
           onOpenChange={(open) => !open && setPayEmp(null)}
-          onSuccess={loadEmployees}
+          onSuccess={handleRefetch}
         />
       )}
     </div>

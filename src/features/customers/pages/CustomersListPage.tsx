@@ -1,45 +1,37 @@
-import React, { useEffect, useState } from 'react'
+import React, { useState, useTransition } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Plus, UserCheck, Eye, DollarSign } from 'lucide-react'
 import { PageHeader } from '@/components/shared/PageHeader/PageHeader'
 import { SummaryCard } from '@/components/shared/SummaryCard/SummaryCard'
 import { StatusBadge } from '@/components/shared/StatusBadge/StatusBadge'
 import { DataTable, ColumnDef } from '@/components/shared/DataTable/DataTable'
-import { LoadingState } from '@/components/shared/StateFeedbacks'
+import { TableSkeleton, CardGridSkeleton } from '@/components/shared/StateFeedbacks'
 import { Button } from '@/components/ui/button'
 import { salesRepository } from '@/mocks/repositories/salesRepository'
-import { mockStorage } from '@/mocks/storage/localStorageAdapter'
+import { useRepositoryQuery } from '@/lib/hooks'
 import { Customer } from '@/types/sales'
 import { AddCustomerDialog } from '../components/AddCustomerDialog'
 import { RecordCustomerPaymentDialog } from '../components/RecordCustomerPaymentDialog'
 import { formatBDT } from '@/lib/calculations/financialCalculations'
 
 export function CustomersListPage(): React.JSX.Element {
-  const [customers, setCustomers] = useState<Customer[]>([])
-  const [loading, setLoading] = useState(true)
+  const { data: customers = [], loading, refetch } = useRepositoryQuery(
+    () => salesRepository.listCustomers(),
+    { initialData: [] }
+  )
   const [addDialogOpen, setAddDialogOpen] = useState(false)
   const [payCust, setPayCust] = useState<Customer | null>(null)
   const navigate = useNavigate()
+  const [, startTransition] = useTransition()
 
-  const loadCustomers = async () => {
-    try {
-      const data = await salesRepository.listCustomers()
-      setCustomers(data)
-    } finally {
-      setLoading(false)
-    }
+  const handleRefetch = () => {
+    startTransition(() => {
+      refetch()
+    })
   }
 
-  useEffect(() => {
-    loadCustomers()
-    const unsubscribe = mockStorage.subscribe(() => {
-      loadCustomers()
-    })
-    return () => unsubscribe()
-  }, [])
-
-  const totalOutstanding = customers.reduce((sum, c) => sum + c.outstandingBalance, 0)
-  const totalPurchases = customers.reduce((sum, c) => sum + c.totalPurchases, 0)
+  const totalOutstanding = customers.reduce((sum, c) => sum + (c.outstandingBalance ?? 0), 0)
+  const totalPurchases = customers.reduce((sum, c) => sum + (c.totalPurchases ?? 0), 0)
 
   const columns: ColumnDef<Customer>[] = [
     {
@@ -105,39 +97,40 @@ export function CustomersListPage(): React.JSX.Element {
     {
       key: 'status',
       header: 'Status',
-      cell: (row) => <StatusBadge status={row.status} />,
+      cell: (row) => (
+        <StatusBadge
+          status={row.status === 'active' ? 'active' : 'inactive'}
+          label={row.status.toUpperCase()}
+        />
+      ),
     },
     {
       key: 'actions',
       header: 'Actions',
       cell: (row) => (
-        <div className="flex items-center gap-1.5">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => navigate(`/customers/${row.id}`)}
-            className="h-8 px-2 text-xs"
-          >
-            <Eye className="h-3.5 w-3.5 mr-1" /> Ledger
-          </Button>
+        <div className="flex items-center justify-end gap-2">
           {row.outstandingBalance > 0 && (
             <Button
-              variant="outline"
               size="sm"
+              variant="outline"
+              className="h-8 text-xs font-medium"
               onClick={() => setPayCust(row)}
-              className="h-8 px-2 text-xs"
             >
-              <DollarSign className="h-3.5 w-3.5 mr-1" /> Pay
+              Receive Pay
             </Button>
           )}
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-8 w-8 p-0"
+            onClick={() => navigate(`/customers/${row.id}`)}
+          >
+            <Eye className="h-4 w-4 text-muted-foreground" />
+          </Button>
         </div>
       ),
     },
   ]
-
-  if (loading) {
-    return <LoadingState message="Loading retail & boutique customers..." />
-  }
 
   return (
     <div className="space-y-6">
@@ -152,40 +145,49 @@ export function CustomersListPage(): React.JSX.Element {
         }
       />
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <SummaryCard
-          title="Customer Receivables"
-          value={formatBDT(totalOutstanding)}
-          subtitle="Net retail/boutique dues"
-          icon={DollarSign}
-        />
-        <SummaryCard
-          title="Total Sales Value"
-          value={formatBDT(totalPurchases)}
-          subtitle="All retail orders & invoices"
-          icon={UserCheck}
-        />
-        <SummaryCard
-          title="Registered Clients"
-          value={`${customers.length} Boutiques`}
-          subtitle="Uttara, Dhanmondi, Gulshan"
-          icon={UserCheck}
-        />
-      </div>
+      {loading ? (
+        <>
+          <CardGridSkeleton count={3} />
+          <TableSkeleton rows={5} cols={6} />
+        </>
+      ) : (
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <SummaryCard
+              title="Customer Receivables"
+              value={formatBDT(totalOutstanding)}
+              subtitle="Net retail/boutique dues"
+              icon={DollarSign}
+            />
+            <SummaryCard
+              title="Total Sales Value"
+              value={formatBDT(totalPurchases)}
+              subtitle="All retail orders & invoices"
+              icon={UserCheck}
+            />
+            <SummaryCard
+              title="Registered Clients"
+              value={`${customers.length} Boutiques`}
+              subtitle="Uttara, Dhanmondi, Gulshan"
+              icon={UserCheck}
+            />
+          </div>
 
-      <DataTable
-        data={customers}
-        columns={columns}
-        searchKey={(c) => `${c.name} ${c.phone} ${c.address || ''}`}
-        searchPlaceholder="Search customer name, phone, or address..."
-        emptyTitle="No customers found"
-        emptyDescription="Add retail boutique accounts to track showroom sales and payments."
-      />
+          <DataTable
+            data={customers}
+            columns={columns}
+            searchKey={(c) => `${c.name} ${c.phone} ${c.address || ''}`}
+            searchPlaceholder="Search customer name, phone, or address..."
+            emptyTitle="No customers found"
+            emptyDescription="Add retail boutique accounts to track showroom sales and payments."
+          />
+        </>
+      )}
 
       <AddCustomerDialog
         open={addDialogOpen}
         onOpenChange={setAddDialogOpen}
-        onSuccess={loadCustomers}
+        onSuccess={handleRefetch}
       />
 
       {payCust && (
@@ -195,7 +197,7 @@ export function CustomersListPage(): React.JSX.Element {
           outstandingBalance={payCust.outstandingBalance}
           open={!!payCust}
           onOpenChange={(open) => !open && setPayCust(null)}
-          onSuccess={loadCustomers}
+          onSuccess={handleRefetch}
         />
       )}
     </div>

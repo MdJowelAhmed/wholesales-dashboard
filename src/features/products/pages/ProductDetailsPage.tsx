@@ -1,44 +1,45 @@
-import React, { useEffect, useState } from 'react'
+import React, { useState, useTransition } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { ArrowLeft, Plus, Tag, DollarSign, Package } from 'lucide-react'
 import { PageHeader } from '@/components/shared/PageHeader/PageHeader'
 import { SummaryCard } from '@/components/shared/SummaryCard/SummaryCard'
 import { StatusBadge } from '@/components/shared/StatusBadge/StatusBadge'
-import { LoadingState, EmptyState } from '@/components/shared/StateFeedbacks'
+import { EmptyState, TableSkeleton, CardGridSkeleton } from '@/components/shared/StateFeedbacks'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { productsRepository } from '@/mocks/repositories/productsRepository'
-import { mockStorage } from '@/mocks/storage/localStorageAdapter'
+import { useRepositoryQuery } from '@/lib/hooks'
 import { Product } from '@/types/products'
 import { AddVariantDialog } from '../components/AddVariantDialog'
 import { formatBDT } from '@/lib/calculations/financialCalculations'
 
 export function ProductDetailsPage(): React.JSX.Element {
   const { id } = useParams<{ id: string }>()
-  const [product, setProduct] = useState<Product | null>(null)
-  const [loading, setLoading] = useState(true)
   const [addVariantOpen, setAddVariantOpen] = useState(false)
+  const [, startTransition] = useTransition()
 
-  const loadProduct = async () => {
-    if (!id) return
-    try {
-      const data = await productsRepository.getProductById(id)
-      setProduct(data)
-    } finally {
-      setLoading(false)
-    }
+  const { data: product, loading, refetch } = useRepositoryQuery<Product | null>(
+    async () => {
+      if (!id) return null
+      return productsRepository.getProductById(id)
+    },
+    { deps: [id], initialData: null }
+  )
+
+  const handleRefetch = () => {
+    startTransition(() => {
+      refetch()
+    })
   }
 
-  useEffect(() => {
-    loadProduct()
-    const unsubscribe = mockStorage.subscribe(() => {
-      loadProduct()
-    })
-    return () => unsubscribe()
-  }, [id])
-
   if (loading) {
-    return <LoadingState message="Loading garment product details..." />
+    return (
+      <div className="space-y-6">
+        <div className="h-8 w-32 bg-muted/50 rounded animate-pulse" />
+        <CardGridSkeleton count={3} />
+        <TableSkeleton rows={4} cols={8} />
+      </div>
+    )
   }
 
   if (!product) {
@@ -57,11 +58,11 @@ export function ProductDetailsPage(): React.JSX.Element {
     )
   }
 
-  const totalStockPieces = product.variants.reduce((s, v) => s + v.stockPieces, 0)
-  const totalValuation = product.variants.reduce(
-    (s, v) => s + v.stockPieces * v.pricePerPiece,
+  const totalStockPieces = product.variants?.reduce((s, v) => s + (v.stockPieces ?? 0), 0) ?? 0
+  const totalValuation = product.variants?.reduce(
+    (s, v) => s + (v.stockPieces ?? 0) * (v.pricePerPiece ?? 0),
     0
-  )
+  ) ?? 0
 
   return (
     <div className="space-y-6">
@@ -138,7 +139,7 @@ export function ProductDetailsPage(): React.JSX.Element {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {product.variants.map((variant) => (
+                {product.variants?.map((variant) => (
                   <tr key={variant.id} className="hover:bg-muted/20 transition-colors">
                     <td className="py-3 px-3 font-mono text-xs font-semibold text-foreground">
                       {variant.sku}
@@ -179,7 +180,7 @@ export function ProductDetailsPage(): React.JSX.Element {
         productCode={product.code}
         open={addVariantOpen}
         onOpenChange={setAddVariantOpen}
-        onSuccess={loadProduct}
+        onSuccess={handleRefetch}
       />
     </div>
   )

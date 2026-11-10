@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useMemo, useTransition } from 'react'
 import {
   RotateCcw,
   Plus,
@@ -11,42 +11,29 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { shopkeepersRepository } from '@/mocks/repositories/shopkeepersRepository'
-import { ShopkeeperReturnRecord } from '@/types/shopkeepers'
+import { useRepositoryQuery } from '@/lib/hooks'
 import { formatBDT } from '@/lib/calculations/financialCalculations'
 import { ProcessUnifiedReturnDialog } from '../components/ProcessUnifiedReturnDialog'
-
-type ReturnWithShopkeeper = ShopkeeperReturnRecord & {
-  shopkeeperId: string
-  shopkeeperName: string
-  marketName: string
-}
+import { ReturnsTable, ReturnWithShopkeeper } from '../components/ReturnsTable'
 
 export function ReturnsListPage() {
-  const [returns, setReturns] = useState<ReturnWithShopkeeper[]>([])
-  const [loading, setLoading] = useState(true)
-
   const [searchTerm, setSearchTerm] = useState('')
   const [conditionFilter, setConditionFilter] = useState<'all' | 'sellable' | 'damaged'>('all')
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [, startTransition] = useTransition()
 
-  const loadReturns = async () => {
-    try {
-      setLoading(true)
-      const data = await shopkeepersRepository.listAllReturns()
-      setReturns(data)
-    } catch (err) {
-      console.error('Failed to load returns', err)
-    } finally {
-      setLoading(false)
-    }
+  const { data: returns = [], loading, refetch } = useRepositoryQuery<ReturnWithShopkeeper[]>(
+    () => shopkeepersRepository.listAllReturns(),
+    { initialData: [] }
+  )
+
+  const handleRefetch = () => {
+    startTransition(() => {
+      refetch()
+    })
   }
-
-  useEffect(() => {
-    loadReturns()
-  }, [])
 
   const filteredReturns = useMemo(() => {
     return returns.filter((r) => {
@@ -55,30 +42,26 @@ export function ReturnsListPage() {
         r.deliveryNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
         r.shopkeeperName.toLowerCase().includes(searchTerm.toLowerCase()) ||
         r.productName.toLowerCase().includes(searchTerm.toLowerCase())
-
       const matchCondition = conditionFilter === 'all' || r.condition === conditionFilter
-
       return matchSearch && matchCondition
     })
   }, [returns, searchTerm, conditionFilter])
 
-  // Summary Metrics
   const metrics = useMemo(() => {
-    const totalCredit = returns.reduce((sum, r) => sum + r.creditAmount, 0)
-    const totalPieces = returns.reduce((sum, r) => sum + r.returnQuantityPieces, 0)
+    const totalCredit = returns.reduce((sum, r) => sum + (r.creditAmount ?? 0), 0)
+    const totalPieces = returns.reduce((sum, r) => sum + (r.returnQuantityPieces ?? 0), 0)
     const sellablePieces = returns
       .filter((r) => r.condition === 'sellable')
-      .reduce((sum, r) => sum + r.returnQuantityPieces, 0)
+      .reduce((sum, r) => sum + (r.returnQuantityPieces ?? 0), 0)
     const damagedPieces = returns
       .filter((r) => r.condition === 'damaged')
-      .reduce((sum, r) => sum + r.returnQuantityPieces, 0)
+      .reduce((sum, r) => sum + (r.returnQuantityPieces ?? 0), 0)
 
     return { totalCredit, totalPieces, sellablePieces, damagedPieces }
   }, [returns])
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-2">
@@ -99,7 +82,6 @@ export function ReturnsListPage() {
         </Button>
       </div>
 
-      {/* KPI Cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card className="border-border bg-card">
           <CardContent className="p-5">
@@ -154,7 +136,6 @@ export function ReturnsListPage() {
         </Card>
       </div>
 
-      {/* Filter and Search Bar */}
       <Card className="border-border bg-card">
         <CardContent className="p-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="relative flex-1 max-w-md">
@@ -186,89 +167,15 @@ export function ReturnsListPage() {
         </CardContent>
       </Card>
 
-      {/* Returns Table */}
-      <Card className="border-border bg-card">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-muted/50 text-xs uppercase text-muted-foreground">
-              <tr>
-                <th className="px-4 py-3">Return #</th>
-                <th className="px-4 py-3">Date</th>
-                <th className="px-4 py-3">Shopkeeper & Market</th>
-                <th className="px-4 py-3">Delivery Ref</th>
-                <th className="px-4 py-3">Garment & Size</th>
-                <th className="px-4 py-3 text-right">Quantity</th>
-                <th className="px-4 py-3 text-right">Credit Value</th>
-                <th className="px-4 py-3">Condition</th>
-                <th className="px-4 py-3">Reason / Remarks</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {loading ? (
-                <tr>
-                  <td colSpan={9} className="py-8 text-center text-muted-foreground">
-                    Loading return records...
-                  </td>
-                </tr>
-              ) : filteredReturns.length === 0 ? (
-                <tr>
-                  <td colSpan={9} className="py-8 text-center text-muted-foreground">
-                    No returns found matching your criteria.
-                  </td>
-                </tr>
-              ) : (
-                filteredReturns.map((r) => (
-                  <tr key={r.id} className="hover:bg-muted/30 transition-colors">
-                    <td className="px-4 py-3 font-semibold text-foreground font-mono">
-                      {r.returnNumber}
-                    </td>
-                    <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
-                      {r.date}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="font-medium text-foreground">{r.shopkeeperName}</div>
-                      <div className="text-xs text-muted-foreground">{r.marketName}</div>
-                    </td>
-                    <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
-                      {r.deliveryNumber}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="font-medium text-foreground">{r.productName}</div>
-                      <div className="text-xs text-muted-foreground">Size {r.size}</div>
-                    </td>
-                    <td className="px-4 py-3 text-right font-semibold text-foreground">
-                      {r.returnQuantityPieces} pcs
-                    </td>
-                    <td className="px-4 py-3 text-right font-medium text-foreground">
-                      {formatBDT(r.creditAmount)}
-                    </td>
-                    <td className="px-4 py-3">
-                      {r.condition === 'sellable' ? (
-                        <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20">
-                          Sellable (Restocked)
-                        </Badge>
-                      ) : (
-                        <Badge className="bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20">
-                          Damaged (Quarantine)
-                        </Badge>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-xs text-muted-foreground max-w-xs truncate">
-                      {r.reason}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+      <ReturnsTable
+        loading={loading}
+        filteredReturns={filteredReturns}
+      />
 
-      {/* Return Dialog */}
       <ProcessUnifiedReturnDialog
         open={dialogOpen}
         onOpenChange={setDialogOpen}
-        onSuccess={loadReturns}
+        onSuccess={handleRefetch}
       />
     </div>
   )

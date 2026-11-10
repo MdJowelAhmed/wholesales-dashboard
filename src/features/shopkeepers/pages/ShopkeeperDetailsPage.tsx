@@ -1,23 +1,19 @@
-import React, { useEffect, useState } from 'react'
+import React, { useState, useTransition } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import {
   ArrowLeft,
   Truck,
   DollarSign,
   RotateCcw,
-  Store,
-  Phone,
-  MapPin,
   Package,
 } from 'lucide-react'
 import { PageHeader } from '@/components/shared/PageHeader/PageHeader'
 import { SummaryCard } from '@/components/shared/SummaryCard/SummaryCard'
 import { PrintButton } from '@/components/shared/PrintButton/PrintButton'
-import { LoadingState, EmptyState } from '@/components/shared/StateFeedbacks'
+import { EmptyState, TableSkeleton, CardGridSkeleton } from '@/components/shared/StateFeedbacks'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
 import { shopkeepersRepository } from '@/mocks/repositories/shopkeepersRepository'
-import { mockStorage } from '@/mocks/storage/localStorageAdapter'
+import { useRepositoryQuery } from '@/lib/hooks'
 import {
   Shopkeeper,
   ShopkeeperDelivery,
@@ -32,27 +28,28 @@ import { ShopkeeperLedgerTab } from '../components/ShopkeeperLedgerTab'
 import { ShopkeeperDeliveriesTab } from '../components/ShopkeeperDeliveriesTab'
 import { ShopkeeperPaymentsTab } from '../components/ShopkeeperPaymentsTab'
 import { ShopkeeperReturnsTab } from '../components/ShopkeeperReturnsTab'
+import { ShopkeeperProfileHeader } from '../components/ShopkeeperProfileHeader'
 import { formatBDT } from '@/lib/calculations/financialCalculations'
 
 export function ShopkeeperDetailsPage(): React.JSX.Element {
   const { id } = useParams<{ id: string }>()
-  const [shopkeeper, setShopkeeper] = useState<Shopkeeper | null>(null)
-  const [deliveries, setDeliveries] = useState<ShopkeeperDelivery[]>([])
-  const [payments, setPayments] = useState<ShopkeeperPayment[]>([])
-  const [returns, setReturns] = useState<ShopkeeperReturnRecord[]>([])
-  const [ledger, setLedger] = useState<ShopkeeperLedgerEntry[]>([])
-  const [activeTab, setActiveTab] = useState<'ledger' | 'deliveries' | 'payments' | 'returns'>(
-    'ledger'
-  )
-  const [loading, setLoading] = useState(true)
-
+  const [activeTab, setActiveTab] = useState<'ledger' | 'deliveries' | 'payments' | 'returns'>('ledger')
   const [deliveryOpen, setDeliveryOpen] = useState(false)
   const [paymentOpen, setPaymentOpen] = useState(false)
   const [returnOpen, setReturnOpen] = useState(false)
+  const [, startTransition] = useTransition()
 
-  const loadData = async () => {
-    if (!id) return
-    try {
+  const { data, loading, refetch } = useRepositoryQuery(
+    async () => {
+      if (!id) {
+        return {
+          shopkeeper: null as Shopkeeper | null,
+          deliveries: [] as ShopkeeperDelivery[],
+          payments: [] as ShopkeeperPayment[],
+          returns: [] as ShopkeeperReturnRecord[],
+          ledger: [] as ShopkeeperLedgerEntry[],
+        }
+      }
       const [sk, d, p, r, l] = await Promise.all([
         shopkeepersRepository.getShopkeeperById(id),
         shopkeepersRepository.getDeliveries(id),
@@ -60,26 +57,36 @@ export function ShopkeeperDetailsPage(): React.JSX.Element {
         shopkeepersRepository.getReturns(id),
         shopkeepersRepository.getLedger(id),
       ])
-      setShopkeeper(sk)
-      setDeliveries(d)
-      setPayments(p)
-      setReturns(r)
-      setLedger(l)
-    } finally {
-      setLoading(false)
+      return { shopkeeper: sk, deliveries: d, payments: p, returns: r, ledger: l }
+    },
+    {
+      deps: [id],
+      initialData: {
+        shopkeeper: null,
+        deliveries: [],
+        payments: [],
+        returns: [],
+        ledger: [],
+      },
     }
+  )
+
+  const { shopkeeper, deliveries, payments, returns, ledger } = data
+
+  const handleRefetch = () => {
+    startTransition(() => {
+      refetch()
+    })
   }
 
-  useEffect(() => {
-    loadData()
-    const unsubscribe = mockStorage.subscribe(() => {
-      loadData()
-    })
-    return () => unsubscribe()
-  }, [id])
-
   if (loading) {
-    return <LoadingState message="Loading shopkeeper ledger and history..." />
+    return (
+      <div className="space-y-6">
+        <div className="h-8 w-32 bg-muted/50 rounded animate-pulse" />
+        <CardGridSkeleton count={5} />
+        <TableSkeleton rows={5} cols={6} />
+      </div>
+    )
   }
 
   if (!shopkeeper) {
@@ -178,69 +185,29 @@ export function ShopkeeperDetailsPage(): React.JSX.Element {
       </div>
 
       {/* Profile Info */}
-      <Card>
-        <CardContent className="p-4 grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <Phone className="h-4 w-4 text-primary" />
-            <span className="font-semibold text-foreground">{shopkeeper.phone}</span>
-          </div>
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <MapPin className="h-4 w-4 text-primary" />
-            <span>{shopkeeper.address}</span>
-          </div>
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <Store className="h-4 w-4 text-primary" />
-            <span className="font-semibold text-foreground">{shopkeeper.marketName}</span>
-          </div>
-        </CardContent>
-      </Card>
+      <ShopkeeperProfileHeader shopkeeper={shopkeeper} />
 
       {/* Details Navigation Tabs */}
       <div className="flex border-b border-border gap-2">
-        <button
-          type="button"
-          onClick={() => setActiveTab('ledger')}
-          className={`pb-2.5 px-3 text-sm font-semibold border-b-2 transition-colors cursor-pointer ${
-            activeTab === 'ledger'
-              ? 'border-primary text-primary'
-              : 'border-transparent text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          Chronological Ledger ({ledger.length})
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab('deliveries')}
-          className={`pb-2.5 px-3 text-sm font-semibold border-b-2 transition-colors cursor-pointer ${
-            activeTab === 'deliveries'
-              ? 'border-primary text-primary'
-              : 'border-transparent text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          Product Deliveries ({deliveries.length})
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab('payments')}
-          className={`pb-2.5 px-3 text-sm font-semibold border-b-2 transition-colors cursor-pointer ${
-            activeTab === 'payments'
-              ? 'border-primary text-primary'
-              : 'border-transparent text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          Payments History ({payments.length})
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab('returns')}
-          className={`pb-2.5 px-3 text-sm font-semibold border-b-2 transition-colors cursor-pointer ${
-            activeTab === 'returns'
-              ? 'border-primary text-primary'
-              : 'border-transparent text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          Returns Adjusted ({returns.length})
-        </button>
+        {[
+          { id: 'ledger', label: 'Chronological Ledger', count: ledger.length },
+          { id: 'deliveries', label: 'Product Deliveries', count: deliveries.length },
+          { id: 'payments', label: 'Payments History', count: payments.length },
+          { id: 'returns', label: 'Returns Adjusted', count: returns.length },
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => setActiveTab(tab.id as typeof activeTab)}
+            className={`pb-2.5 px-3 text-sm font-semibold border-b-2 transition-colors cursor-pointer ${
+              activeTab === tab.id
+                ? 'border-primary text-primary'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            {tab.label} ({tab.count})
+          </button>
+        ))}
       </div>
 
       {/* Tab Panels */}
@@ -255,7 +222,7 @@ export function ShopkeeperDetailsPage(): React.JSX.Element {
         shopName={shopkeeper.shopName}
         open={deliveryOpen}
         onOpenChange={setDeliveryOpen}
-        onSuccess={loadData}
+        onSuccess={handleRefetch}
       />
 
       <RecordShopkeeperPaymentDialog
@@ -264,7 +231,7 @@ export function ShopkeeperDetailsPage(): React.JSX.Element {
         outstandingBalance={shopkeeper.outstandingBalance}
         open={paymentOpen}
         onOpenChange={setPaymentOpen}
-        onSuccess={loadData}
+        onSuccess={handleRefetch}
       />
 
       <RecordShopkeeperReturnDialog
@@ -273,7 +240,7 @@ export function ShopkeeperDetailsPage(): React.JSX.Element {
         deliveries={deliveries}
         open={returnOpen}
         onOpenChange={setReturnOpen}
-        onSuccess={loadData}
+        onSuccess={handleRefetch}
       />
     </div>
   )

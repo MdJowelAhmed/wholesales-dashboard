@@ -1,45 +1,37 @@
-import React, { useEffect, useState } from 'react'
+import React, { useState, useTransition } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Plus, Truck, Eye, CreditCard, DollarSign } from 'lucide-react'
 import { PageHeader } from '@/components/shared/PageHeader/PageHeader'
 import { SummaryCard } from '@/components/shared/SummaryCard/SummaryCard'
 import { StatusBadge } from '@/components/shared/StatusBadge/StatusBadge'
 import { DataTable, ColumnDef } from '@/components/shared/DataTable/DataTable'
-import { LoadingState } from '@/components/shared/StateFeedbacks'
+import { TableSkeleton, CardGridSkeleton } from '@/components/shared/StateFeedbacks'
 import { Button } from '@/components/ui/button'
 import { suppliersRepository } from '@/mocks/repositories/suppliersRepository'
-import { mockStorage } from '@/mocks/storage/localStorageAdapter'
+import { useRepositoryQuery } from '@/lib/hooks'
 import { Supplier } from '@/types/suppliers'
 import { AddSupplierDialog } from '../components/AddSupplierDialog'
 import { RecordSupplierPaymentDialog } from '../components/RecordSupplierPaymentDialog'
 import { formatBDT } from '@/lib/calculations/financialCalculations'
 
 export function SuppliersListPage(): React.JSX.Element {
-  const [suppliers, setSuppliers] = useState<Supplier[]>([])
-  const [loading, setLoading] = useState(true)
+  const { data: suppliers = [], loading, refetch } = useRepositoryQuery(
+    () => suppliersRepository.listSuppliers(),
+    { initialData: [] }
+  )
   const [addDialogOpen, setAddDialogOpen] = useState(false)
   const [paySupplier, setPaySupplier] = useState<Supplier | null>(null)
   const navigate = useNavigate()
+  const [, startTransition] = useTransition()
 
-  const loadSuppliers = async () => {
-    try {
-      const data = await suppliersRepository.listSuppliers()
-      setSuppliers(data)
-    } finally {
-      setLoading(false)
-    }
+  const handleRefetch = () => {
+    startTransition(() => {
+      refetch()
+    })
   }
 
-  useEffect(() => {
-    loadSuppliers()
-    const unsubscribe = mockStorage.subscribe(() => {
-      loadSuppliers()
-    })
-    return () => unsubscribe()
-  }, [])
-
-  const totalOutstanding = suppliers.reduce((sum, s) => sum + s.outstandingPayable, 0)
-  const totalPurchases = suppliers.reduce((sum, s) => sum + s.totalPurchases, 0)
+  const totalOutstanding = suppliers.reduce((sum, s) => sum + (s.outstandingPayable ?? 0), 0)
+  const totalPurchases = suppliers.reduce((sum, s) => sum + (s.totalPurchases ?? 0), 0)
 
   const columns: ColumnDef<Supplier>[] = [
     {
@@ -58,19 +50,17 @@ export function SuppliersListPage(): React.JSX.Element {
             >
               {row.name}
             </Link>
-            <div className="text-xs text-muted-foreground">
-              {row.contactPerson} ({row.phone})
-            </div>
+            <div className="text-xs text-muted-foreground">{row.contactPerson}</div>
           </div>
         </div>
       ),
     },
     {
       key: 'materialsSupplied',
-      header: 'Materials Supplied',
+      header: 'Primary Materials',
       cell: (row) => (
         <div className="text-xs text-muted-foreground max-w-xs truncate">
-          {row.materialsSupplied.join(', ')}
+          {row.materialsSupplied?.join(', ') || 'Various Materials'}
         </div>
       ),
     },
@@ -86,10 +76,10 @@ export function SuppliersListPage(): React.JSX.Element {
     },
     {
       key: 'totalPayments',
-      header: 'Payments Settled',
+      header: 'Total Paid',
       sortable: true,
       cell: (row) => (
-        <span className="font-mono text-xs font-semibold text-muted-foreground">
+        <span className="font-mono text-xs font-semibold text-status-active-foreground dark:text-status-active">
           {formatBDT(row.totalPayments)}
         </span>
       ),
@@ -111,27 +101,32 @@ export function SuppliersListPage(): React.JSX.Element {
     {
       key: 'status',
       header: 'Status',
-      cell: (row) => <StatusBadge status={row.status} />,
+      cell: (row) => (
+        <StatusBadge
+          status={row.status === 'active' ? 'active' : 'inactive'}
+          label={row.status.toUpperCase()}
+        />
+      ),
     },
     {
       key: 'actions',
       header: 'Actions',
       cell: (row) => (
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center justify-end gap-2">
           <Button
-            variant="ghost"
             size="sm"
+            variant="ghost"
+            className="h-8 w-8 p-0"
             onClick={() => navigate(`/suppliers/${row.id}`)}
-            className="h-8 px-2 text-xs"
           >
-            <Eye className="h-3.5 w-3.5 mr-1" /> Ledger
+            <Eye className="h-4 w-4 text-muted-foreground" />
           </Button>
           {row.outstandingPayable > 0 && (
             <Button
-              variant="outline"
               size="sm"
+              variant="outline"
+              className="h-8 text-xs font-medium"
               onClick={() => setPaySupplier(row)}
-              className="h-8 px-2 text-xs"
             >
               <CreditCard className="h-3.5 w-3.5 mr-1" /> Pay
             </Button>
@@ -140,10 +135,6 @@ export function SuppliersListPage(): React.JSX.Element {
       ),
     },
   ]
-
-  if (loading) {
-    return <LoadingState message="Loading fabric mills and supplier registry..." />
-  }
 
   return (
     <div className="space-y-6">
@@ -158,40 +149,49 @@ export function SuppliersListPage(): React.JSX.Element {
         }
       />
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <SummaryCard
-          title="Total Outstanding Payables"
-          value={formatBDT(totalOutstanding)}
-          subtitle="Liabilities owed to fabric/trims mills"
-          icon={DollarSign}
-        />
-        <SummaryCard
-          title="Cumulative Purchases"
-          value={formatBDT(totalPurchases)}
-          subtitle="Total material procurements"
-          icon={Truck}
-        />
-        <SummaryCard
-          title="Active Suppliers"
-          value={`${suppliers.length} Mills & Traders`}
-          subtitle="Square, Beximco, Rahim & partners"
-          icon={Truck}
-        />
-      </div>
+      {loading ? (
+        <>
+          <CardGridSkeleton count={3} />
+          <TableSkeleton rows={5} cols={6} />
+        </>
+      ) : (
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <SummaryCard
+              title="Total Outstanding Payables"
+              value={formatBDT(totalOutstanding)}
+              subtitle="Liabilities owed to fabric/trims mills"
+              icon={DollarSign}
+            />
+            <SummaryCard
+              title="Cumulative Purchases"
+              value={formatBDT(totalPurchases)}
+              subtitle="Total material procurements"
+              icon={Truck}
+            />
+            <SummaryCard
+              title="Active Suppliers"
+              value={`${suppliers.length} Mills & Traders`}
+              subtitle="Square, Beximco, Rahim & partners"
+              icon={Truck}
+            />
+          </div>
 
-      <DataTable
-        data={suppliers}
-        columns={columns}
-        searchKey={(s) => `${s.name} ${s.contactPerson} ${s.phone} ${s.address}`}
-        searchPlaceholder="Search supplier name, contact person, or location..."
-        emptyTitle="No suppliers found"
-        emptyDescription="Add spinning mills or accessory traders to record transactions."
-      />
+          <DataTable
+            data={suppliers}
+            columns={columns}
+            searchKey={(s) => `${s.name} ${s.contactPerson} ${s.phone} ${s.address}`}
+            searchPlaceholder="Search supplier name, contact person, or location..."
+            emptyTitle="No suppliers found"
+            emptyDescription="Add spinning mills or accessory traders to record transactions."
+          />
+        </>
+      )}
 
       <AddSupplierDialog
         open={addDialogOpen}
         onOpenChange={setAddDialogOpen}
-        onSuccess={loadSuppliers}
+        onSuccess={handleRefetch}
       />
 
       {paySupplier && (
@@ -201,7 +201,7 @@ export function SuppliersListPage(): React.JSX.Element {
           outstandingPayable={paySupplier.outstandingPayable}
           open={!!paySupplier}
           onOpenChange={(open) => !open && setPaySupplier(null)}
-          onSuccess={loadSuppliers}
+          onSuccess={handleRefetch}
         />
       )}
     </div>
