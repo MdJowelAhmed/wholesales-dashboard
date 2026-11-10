@@ -3,6 +3,7 @@ import { AppLayout } from '@/app/layouts/AppLayout'
 import {
   DashboardOverviewPage,
   ProductsListPage,
+  VariantsPage,
   ProductDetailsPage,
   RawMaterialsListPage,
   SuppliersListPage,
@@ -49,6 +50,10 @@ export const router = createBrowserRouter([
             element: <ProductDetailsPage />,
           },
         ],
+      },
+      {
+        path: 'variants',
+        element: <VariantsPage />,
       },
       {
         path: 'raw-materials',

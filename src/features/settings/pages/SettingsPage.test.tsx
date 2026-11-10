@@ -13,7 +13,7 @@ describe('SettingsPage', () => {
     ).toBeInTheDocument()
   })
 
-  it('switches between profile, branches, and data management tabs', () => {
+  it('switches between profile, branches, and data management tabs', async () => {
     render(<SettingsPage />)
 
     // Switch to branches
@@ -35,5 +35,11 @@ describe('SettingsPage', () => {
     expect(
       screen.getByRole('button', { name: /Download Snapshot/i })
     ).toBeInTheDocument()
+
+    // Switch to attributes (Categories & Sizes)
+    const attributesTab = screen.getByRole('button', { name: /Categories & Sizes/i })
+    fireEvent.click(attributesTab)
+    expect(await screen.findByText(/Product Categories \(পোশাকের ক্যাটাগরি\)/i)).toBeInTheDocument()
+    expect(screen.getByText(/Size Formats & Ranges \(সাইজ ও সাইজ রেঞ্জ\)/i)).toBeInTheDocument()
   })
 })

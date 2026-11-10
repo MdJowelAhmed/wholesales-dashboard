@@ -40,6 +40,7 @@ export function AddVariantDialog({
   onSuccess,
 }: AddVariantDialogProps): React.JSX.Element {
   const [loading, setLoading] = useState(false)
+  const [availableSizes, setAvailableSizes] = useState<string[]>([])
 
   const {
     register,
@@ -57,6 +58,15 @@ export function AddVariantDialog({
       stockPieces: 50,
     },
   })
+
+  React.useEffect(() => {
+    productsRepository.listSizes().then((sizes) => {
+      setAvailableSizes(sizes)
+      if (sizes.length > 0) {
+        setValue('size', sizes[0])
+      }
+    })
+  }, [setValue])
 
   const onSubmit = async (data: VariantFormData) => {
     setLoading(true)
@@ -99,21 +109,18 @@ export function AddVariantDialog({
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
               <label className="text-xs font-semibold text-foreground">
-                Size Format (e.g. 16-20, 22-26, 28-32, 34-38) *
+                Size Format *
               </label>
-              <Input placeholder="e.g. 16-20" {...register('size')} />
-              <div className="flex flex-wrap gap-1 pt-1">
-                {['16-20', '22-26', '28-32', '34-38'].map((preset) => (
-                  <button
-                    key={preset}
-                    type="button"
-                    onClick={() => setValue('size', preset, { shouldValidate: true })}
-                    className="text-[10px] px-1.5 py-0.5 rounded border border-border/70 bg-muted/30 hover:bg-muted text-foreground"
-                  >
+              <select
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                {...register('size')}
+              >
+                {availableSizes.map((preset) => (
+                  <option key={preset} value={preset}>
                     {preset}
-                  </button>
+                  </option>
                 ))}
-              </div>
+              </select>
               {errors.size && (
                 <p className="text-[11px] text-destructive">{errors.size.message}</p>
               )}

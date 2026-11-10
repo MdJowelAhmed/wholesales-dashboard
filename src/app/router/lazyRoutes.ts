@@ -12,6 +12,12 @@ export const ProductsListPage = lazy(() =>
   }))
 )
 
+export const VariantsPage = lazy(() =>
+  import('@/features/variants/pages/VariantsPage').then((m) => ({
+    default: m.VariantsPage,
+  }))
+)
+
 export const ProductDetailsPage = lazy(() =>
   import('@/features/products/pages/ProductDetailsPage').then((m) => ({
     default: m.ProductDetailsPage,

@@ -39,6 +39,10 @@ export function ProductsListPage(): React.JSX.Element {
     0
   )
 
+  const distinctCategories = useMemo(() => {
+    return Array.from(new Set(products.map((p) => p.category).filter(Boolean)))
+  }, [products])
+
   const columns: ColumnDef<Product>[] = [
     {
       key: 'name',
@@ -177,8 +181,8 @@ export function ProductsListPage(): React.JSX.Element {
             />
             <SummaryCard
               title="Active Categories"
-              value="5 Categories"
-              subtitle="Kids, Girls, Boys, Infants, Mens"
+              value={`${distinctCategories.length} Categories`}
+              subtitle={distinctCategories.slice(0, 4).join(', ') || 'No categories defined'}
               icon={Tag}
             />
           </div>
@@ -195,10 +199,11 @@ export function ProductsListPage(): React.JSX.Element {
                 className="h-9 rounded-md border border-input bg-background px-3 py-1 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
               >
                 <option value="all">All Categories</option>
-                <option value="Kids' Wear">Kids' Wear</option>
-                <option value="Girls' Wear">Girls' Wear</option>
-                <option value="Boys' Wear">Boys' Wear</option>
-                <option value="Infants' Wear">Infants' Wear</option>
+                {distinctCategories.map((cat) => (
+                  <option key={cat} value={cat}>
+                    {cat}
+                  </option>
+                ))}
               </select>
             }
             emptyTitle="No garments products found"

@@ -1,12 +1,13 @@
 import { useState } from 'react'
-import { Settings, Building2, FileText, RotateCcw } from 'lucide-react'
+import { Settings, Building2, FileText, RotateCcw, Tag } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { FactoryProfileTab } from '../components/FactoryProfileTab'
 import { BranchesTab } from '../components/BranchesTab'
 import { DataManagementTab } from '../components/DataManagementTab'
+import { ProductAttributesTab } from '../components/ProductAttributesTab'
 
 export function SettingsPage() {
-  const [activeTab, setActiveTab] = useState<'profile' | 'branches' | 'data'>('profile')
+  const [activeTab, setActiveTab] = useState<'profile' | 'branches' | 'attributes' | 'data'>('profile')
 
   return (
     <div className="space-y-6 max-w-4xl">
@@ -42,6 +43,15 @@ export function SettingsPage() {
           Warehouses & Depots
         </Button>
         <Button
+          variant={activeTab === 'attributes' ? 'default' : 'outline'}
+          size="sm"
+          onClick={() => setActiveTab('attributes')}
+          className="text-xs"
+        >
+          <Tag className="mr-1.5 h-3.5 w-3.5" />
+          Categories & Sizes
+        </Button>
+        <Button
           variant={activeTab === 'data' ? 'default' : 'outline'}
           size="sm"
           onClick={() => setActiveTab('data')}
@@ -55,6 +65,7 @@ export function SettingsPage() {
       {/* Tab Panels */}
       {activeTab === 'profile' && <FactoryProfileTab />}
       {activeTab === 'branches' && <BranchesTab />}
+      {activeTab === 'attributes' && <ProductAttributesTab />}
       {activeTab === 'data' && <DataManagementTab />}
     </div>
   )

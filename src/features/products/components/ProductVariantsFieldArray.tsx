@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 import {
   Control,
   UseFormRegister,
@@ -6,15 +6,17 @@ import {
   useFieldArray,
   useWatch,
 } from 'react-hook-form'
-import { Plus, Trash2, Layers, Sparkles } from 'lucide-react'
+import { Plus, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
   ProductFormData,
-  GARMENT_SIZE_PRESETS,
   WHOLESALE_SERIES_PRESET,
 } from './productFormSchema'
+import { productsRepository } from '@/mocks/repositories/productsRepository'
 import { formatBDT } from '@/lib/calculations/financialCalculations'
+import { ProductSizeQuickBar } from './ProductSizeQuickBar'
+import { toast } from 'sonner'
 
 interface ProductVariantsFieldArrayProps {
   control: Control<ProductFormData>
@@ -27,6 +29,8 @@ export function ProductVariantsFieldArray({
   register,
   errors,
 }: ProductVariantsFieldArrayProps): React.JSX.Element {
+  const [availableSizes, setAvailableSizes] = useState<string[]>([])
+
   const { fields, append, remove, replace } = useFieldArray({
     control,
     name: 'variants',
@@ -37,15 +41,24 @@ export function ProductVariantsFieldArray({
     name: 'variants',
   })
 
-  const totalPieces = watchedVariants?.reduce(
-    (sum, v) => sum + (Number(v?.stockPieces) || 0),
-    0
-  ) || 0
+  useEffect(() => {
+    productsRepository.listSizes().then((sizes) => {
+      setAvailableSizes(sizes)
+    })
+  }, [])
 
-  const totalValuation = watchedVariants?.reduce(
-    (sum, v) => sum + (Number(v?.stockPieces) || 0) * (Number(v?.pricePerPiece) || 0),
-    0
-  ) || 0
+  const totalPieces =
+    watchedVariants?.reduce(
+      (sum, v) => sum + (Number(v?.stockPieces) || 0),
+      0
+    ) || 0
+
+  const totalValuation =
+    watchedVariants?.reduce(
+      (sum, v) =>
+        sum + (Number(v?.stockPieces) || 0) * (Number(v?.pricePerPiece) || 0),
+      0
+    ) || 0
 
   const handleApplyFullSeries = () => {
     replace(WHOLESALE_SERIES_PRESET)
@@ -61,53 +74,37 @@ export function ProductVariantsFieldArray({
     })
   }
 
+  const handleSaveNewCustomSize = async (trimmed: string) => {
+    try {
+      const updated = await productsRepository.addSize(trimmed)
+      setAvailableSizes(updated)
+      append({
+        size: trimmed,
+        color: '',
+        pricePerPiece: 250,
+        costPerPiece: 150,
+        stockPieces: 100,
+      })
+      toast.success(`Size "${trimmed}" added to catalog`)
+    } catch {
+      toast.error('Failed to add size')
+    }
+  }
+
   return (
     <div className="p-3.5 rounded-lg border border-border bg-muted/20 space-y-3">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border/50 pb-2">
-        <div>
-          <div className="text-xs font-bold text-foreground uppercase tracking-wider flex items-center gap-1.5">
-            <Layers className="h-4 w-4 text-primary" />
-            Initial Variant & Piece Pricing (16-20, 22-26, 28-32, 34-38...)
-          </div>
-          <p className="text-[11px] text-muted-foreground mt-0.5">
-            Define size batches with their respective wholesale price and initial stock quantity.
-          </p>
-        </div>
-
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          onClick={handleApplyFullSeries}
-          className="h-7 text-xs border-primary/40 text-primary hover:bg-primary/10 self-start sm:self-auto"
-        >
-          <Sparkles className="h-3 w-3 mr-1" />
-          Load 16-20 to 34-38 Pack
-        </Button>
-      </div>
-
-      {/* Quick size preset buttons */}
-      <div className="flex flex-wrap items-center gap-1.5">
-        <span className="text-[10px] text-muted-foreground font-medium mr-1">
-          Quick Sizes:
-        </span>
-        {GARMENT_SIZE_PRESETS.slice(0, 6).map((preset) => (
-          <button
-            key={preset}
-            type="button"
-            onClick={() => handleQuickAddPreset(preset)}
-            className="text-[11px] px-2 py-0.5 rounded border border-border/70 bg-background hover:bg-secondary text-foreground hover:border-primary/50 transition-colors"
-          >
-            +{preset}
-          </button>
-        ))}
-      </div>
+      <ProductSizeQuickBar
+        availableSizes={availableSizes}
+        onQuickAddPreset={handleQuickAddPreset}
+        onApplyFullSeries={handleApplyFullSeries}
+        onSaveNewCustomSize={handleSaveNewCustomSize}
+      />
 
       {/* Variants Table Header */}
       <div className="grid grid-cols-12 gap-2 text-[11px] font-semibold text-muted-foreground px-1">
-        <div className="col-span-3">Size / Format *</div>
+        <div className="col-span-4">Size Dropdown *</div>
         <div className="col-span-3">Wholesale (৳/pc) *</div>
-        <div className="col-span-3">Stock Pieces *</div>
+        <div className="col-span-2">Stock (Pcs) *</div>
         <div className="col-span-2">Cost (৳/pc)</div>
         <div className="col-span-1 text-center">Action</div>
       </div>
@@ -116,17 +113,27 @@ export function ProductVariantsFieldArray({
       <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
         {fields.map((field, index) => {
           const rowError = errors.variants?.[index]
+          const currentSizeVal = watchedVariants?.[index]?.size
+
           return (
             <div
               key={field.id}
               className="grid grid-cols-12 gap-2 items-start p-1.5 rounded-md bg-background/60 border border-border/60"
             >
-              <div className="col-span-3 space-y-1">
-                <Input
-                  placeholder="e.g. 16-20"
-                  className="h-8 text-xs font-semibold"
+              <div className="col-span-4 space-y-1">
+                <select
+                  className="flex h-8 w-full rounded-md border border-input bg-background px-2 py-1 text-xs font-semibold text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
                   {...register(`variants.${index}.size`)}
-                />
+                >
+                  {availableSizes.map((sz) => (
+                    <option key={sz} value={sz}>
+                      {sz}
+                    </option>
+                  ))}
+                  {currentSizeVal && !availableSizes.includes(currentSizeVal) && (
+                    <option value={currentSizeVal}>{currentSizeVal}</option>
+                  )}
+                </select>
                 {rowError?.size && (
                   <p className="text-[10px] text-destructive">{rowError.size.message}</p>
                 )}
@@ -149,7 +156,7 @@ export function ProductVariantsFieldArray({
                 )}
               </div>
 
-              <div className="col-span-3 space-y-1">
+              <div className="col-span-2 space-y-1">
                 <Input
                   type="number"
                   placeholder="100"
@@ -206,7 +213,7 @@ export function ProductVariantsFieldArray({
           variant="outline"
           onClick={() =>
             append({
-              size: '',
+              size: availableSizes[0] || '16-20',
               color: '',
               pricePerPiece: 280,
               costPerPiece: 175,
@@ -216,10 +223,10 @@ export function ProductVariantsFieldArray({
           className="h-7 text-xs"
         >
           <Plus className="h-3 w-3 mr-1" />
-          Add Size Variant
+          Add Size Row
         </Button>
 
-        <div className="flex items-center gap-3 text-xs bg-background/80 px-2.5 py-1 rounded border border-border">
+        <div className="flex items-center gap-2.5 text-xs bg-background/80 px-2.5 py-1 rounded border border-border">
           <span className="text-muted-foreground">
             Sizes: <strong className="text-foreground">{fields.length}</strong>
           </span>
@@ -230,7 +237,7 @@ export function ProductVariantsFieldArray({
           </span>
           <span className="text-muted-foreground">|</span>
           <span className="text-muted-foreground">
-            Stock Valuation:{' '}
+            Valuation:{' '}
             <strong className="text-foreground">{formatBDT(totalValuation)}</strong>
           </span>
         </div>

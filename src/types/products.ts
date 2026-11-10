@@ -21,3 +21,32 @@ export interface Product extends BaseEntity {
   status: 'active' | 'inactive'
   variants: ProductVariant[]
 }
+
+export const DEFAULT_PRODUCT_CATEGORIES: readonly string[] = [
+  "Kids' Wear",
+  "Girls' Wear",
+  "Boys' Wear",
+  "Infants' Wear",
+  "Mens' Wear",
+  "Womens' Wear",
+] as const
+
+export const DEFAULT_PRODUCT_SIZES: readonly string[] = [
+  '16-20',
+  '22-26',
+  '28-32',
+  '34-38',
+  '18',
+  '20',
+  '22',
+  '24',
+  '26',
+  '28',
+  '30',
+  'S',
+  'M',
+  'L',
+  'XL',
+  'XXL',
+] as const
+

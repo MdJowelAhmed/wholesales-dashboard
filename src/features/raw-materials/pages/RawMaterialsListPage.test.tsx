@@ -12,8 +12,8 @@ describe('RawMaterialsListPage', () => {
   it('renders raw materials list, units, and low stock indicator', async () => {
     renderWithProviders(<RawMaterialsListPage />, { initialEntries: ['/raw-materials'] })
 
-    expect(await screen.findByText('Raw Materials & Fabric Store')).toBeInTheDocument()
-    expect(screen.getByText('Total Stock Value')).toBeInTheDocument()
+    expect(await screen.findByText('Total Stock Value')).toBeInTheDocument()
+    expect(screen.getByText('Raw Materials & Fabric Store')).toBeInTheDocument()
     expect(screen.getByText(/100% Combed Cotton Single Jersey/i)).toBeInTheDocument()
     expect(screen.getAllByText(/Square Textiles Ltd/i)[0]).toBeInTheDocument()
 

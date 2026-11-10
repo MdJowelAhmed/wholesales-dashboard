@@ -21,6 +21,7 @@ import {
 } from './productFormSchema'
 import { ProductImageUpload } from './ProductImageUpload'
 import { ProductVariantsFieldArray } from './ProductVariantsFieldArray'
+import { CategorySelectWithQuickAdd } from './CategorySelectWithQuickAdd'
 
 function generateVariantId(index: number): string {
   return `var-${Date.now()}-${index + 1}`
@@ -60,6 +61,7 @@ export function AddProductDialog({
   })
 
   const currentImageUrl = useWatch({ control, name: 'imageUrl' })
+  const currentCategory = useWatch({ control, name: 'category' })
 
   const onSubmit = async (data: ProductFormData) => {
     setLoading(true)
@@ -158,22 +160,11 @@ export function AddProductDialog({
               )}
             </div>
 
-            <div className="space-y-1">
-              <label htmlFor="product-category" className="text-xs font-semibold text-foreground">
-                Category *
-              </label>
-              <select
-                id="product-category"
-                {...register('category')}
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-              >
-                <option value="Kids' Wear">Kids' Wear (16-20, 22-26, 28-32, 34-38)</option>
-                <option value="Girls' Wear">Girls' Wear</option>
-                <option value="Boys' Wear">Boys' Wear</option>
-                <option value="Infants' Wear">Infants' Wear</option>
-                <option value="Mens' Wear">Mens' Wear</option>
-              </select>
-            </div>
+            <CategorySelectWithQuickAdd
+              value={currentCategory}
+              onChange={(val) => setValue('category', val, { shouldValidate: true })}
+              error={errors.category?.message}
+            />
 
             <div className="space-y-1">
               <label htmlFor="product-fabric" className="text-xs font-semibold text-foreground">

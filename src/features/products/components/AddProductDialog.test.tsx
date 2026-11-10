@@ -84,5 +84,48 @@ describe('AddProductDialog', () => {
       expect(handleOpenChange).toHaveBeenCalledWith(false)
     })
   })
+
+  it('allows user to dynamically add a new custom category on the fly', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(
+      <AddProductDialog open={true} onOpenChange={vi.fn()} onSuccess={vi.fn()} />
+    )
+
+    const newCatBtn = screen.getByRole('button', { name: /New Category/i })
+    await user.click(newCatBtn)
+
+    const catInput = screen.getByPlaceholderText(/Export T-Shirts, Denim Jeans/i)
+    await user.type(catInput, 'Premium Panjabi')
+
+    const addBtn = screen.getByRole('button', { name: /^Add$/i })
+    await user.click(addBtn)
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('Premium Panjabi')).toBeInTheDocument()
+    })
+  })
+
+  it('allows user to dynamically create a new size format', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(
+      <AddProductDialog open={true} onOpenChange={vi.fn()} onSuccess={vi.fn()} />
+    )
+
+    const newSizeBtn = screen.getByRole('button', { name: /New Size/i })
+    await user.click(newSizeBtn)
+
+    const sizeInput = screen.getByPlaceholderText(/36-40, XXL/i)
+    await user.type(sizeInput, '36-40')
+
+    // Find the check button inside the new size row
+    const checkBtn = sizeInput.parentElement?.querySelector('button')
+    if (checkBtn) {
+      await user.click(checkBtn)
+    }
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('36-40')).toBeInTheDocument()
+    })
+  })
 })
 

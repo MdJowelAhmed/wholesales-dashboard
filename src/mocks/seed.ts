@@ -11,6 +11,15 @@ import {
   initialShopkeeperPayments,
   initialShopkeeperReturns,
 } from './data/shopkeepers.data'
+import { DEFAULT_PRODUCT_CATEGORIES, DEFAULT_PRODUCT_SIZES } from '@/types/products'
+import {
+  CategoryItem,
+  SizeItem,
+  ColorItem,
+  INITIAL_CATEGORY_ITEMS,
+  INITIAL_SIZE_ITEMS,
+  INITIAL_COLOR_ITEMS,
+} from '@/types/variants'
 import {
   initialCustomers,
   initialCustomerLedger,
@@ -22,6 +31,11 @@ import {
 
 export interface SeedDatabase {
   version: string
+  categories?: string[]
+  productSizes?: string[]
+  categoryItems?: CategoryItem[]
+  sizeItems?: SizeItem[]
+  colorItems?: ColorItem[]
   products: typeof initialProducts
   materials: typeof initialMaterials
   materialMovements: typeof initialMaterialMovements
@@ -50,6 +64,11 @@ export function getFreshSeedData(): SeedDatabase {
   return JSON.parse(
     JSON.stringify({
       version: '1.0.0',
+      categories: [...DEFAULT_PRODUCT_CATEGORIES],
+      productSizes: [...DEFAULT_PRODUCT_SIZES],
+      categoryItems: INITIAL_CATEGORY_ITEMS,
+      sizeItems: INITIAL_SIZE_ITEMS,
+      colorItems: INITIAL_COLOR_ITEMS,
       products: initialProducts,
       materials: initialMaterials,
       materialMovements: initialMaterialMovements,

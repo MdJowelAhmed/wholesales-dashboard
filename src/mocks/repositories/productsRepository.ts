@@ -1,5 +1,9 @@
-import { Product, ProductVariant } from '@/types/products'
+import {
+  Product,
+  ProductVariant,
+} from '@/types/products'
 import { mockStorage } from '../storage/localStorageAdapter'
+import { variantsRepository } from './variantsRepository'
 
 export interface ListProductsFilter {
   search?: string
@@ -95,6 +99,34 @@ export class ProductsRepository {
     product.variants.push(newVariant)
     mockStorage.saveDatabase(db)
     return product
+  }
+
+  public async listCategories(): Promise<string[]> {
+    return variantsRepository.listCategoryNames()
+  }
+
+  public async addCategory(name: string): Promise<string[]> {
+    await variantsRepository.createCategory(name)
+    return variantsRepository.listCategoryNames()
+  }
+
+  public async deleteCategory(name: string): Promise<string[]> {
+    await variantsRepository.deleteCategory(name)
+    return variantsRepository.listCategoryNames()
+  }
+
+  public async listSizes(): Promise<string[]> {
+    return variantsRepository.listSizeNames()
+  }
+
+  public async addSize(sizeName: string): Promise<string[]> {
+    await variantsRepository.createSize(sizeName)
+    return variantsRepository.listSizeNames()
+  }
+
+  public async deleteSize(sizeName: string): Promise<string[]> {
+    await variantsRepository.deleteSize(sizeName)
+    return variantsRepository.listSizeNames()
   }
 }
 

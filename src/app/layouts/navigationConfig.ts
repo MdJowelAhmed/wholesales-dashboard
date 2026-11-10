@@ -17,6 +17,7 @@ import {
   BarChart3,
   Settings,
   Sparkles,
+  Sliders,
 } from 'lucide-react'
 
 export interface NavItem {
@@ -37,6 +38,7 @@ export const navSections: NavSection[] = [
     items: [
       { name: 'Overview', href: '/', icon: LayoutDashboard },
       { name: 'Products', href: '/products', icon: Shirt },
+      { name: 'Variants', href: '/variants', icon: Sliders },
       { name: 'Raw Materials', href: '/raw-materials', icon: Layers },
       { name: 'Suppliers', href: '/suppliers', icon: Truck },
       { name: 'Workers & Staff', href: '/employees', icon: Users },
