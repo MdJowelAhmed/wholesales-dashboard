@@ -15,7 +15,7 @@ import { productsRepository } from '@/mocks/repositories/productsRepository'
 import { toast } from 'sonner'
 
 const variantSchema = z.object({
-  size: z.string().min(1, 'Size is required (e.g. 18, 20, 22)'),
+  size: z.string().min(1, 'Size or format is required (e.g. 16-20, 22-26, 28-32)'),
   color: z.string().optional(),
   pricePerPiece: z.number().positive('Price per piece must be greater than 0'),
   costPerPiece: z.number().min(0, 'Cost cannot be negative').optional(),
@@ -44,6 +44,7 @@ export function AddVariantDialog({
   const {
     register,
     handleSubmit,
+    setValue,
     reset,
     formState: { errors },
   } = useForm<VariantFormData>({
@@ -98,9 +99,21 @@ export function AddVariantDialog({
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
               <label className="text-xs font-semibold text-foreground">
-                Size (e.g. 18, 20, 22) *
+                Size Format (e.g. 16-20, 22-26, 28-32, 34-38) *
               </label>
-              <Input placeholder="20" {...register('size')} />
+              <Input placeholder="e.g. 16-20" {...register('size')} />
+              <div className="flex flex-wrap gap-1 pt-1">
+                {['16-20', '22-26', '28-32', '34-38'].map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => setValue('size', preset, { shouldValidate: true })}
+                    className="text-[10px] px-1.5 py-0.5 rounded border border-border/70 bg-muted/30 hover:bg-muted text-foreground"
+                  >
+                    {preset}
+                  </button>
+                ))}
+              </div>
               {errors.size && (
                 <p className="text-[11px] text-destructive">{errors.size.message}</p>
               )}

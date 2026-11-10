@@ -87,6 +87,30 @@ export function ProductDetailsPage(): React.JSX.Element {
         }
       />
 
+      {product.imageUrl && (
+        <div className="flex items-center gap-4 p-3.5 rounded-xl border border-border bg-card">
+          <img
+            src={product.imageUrl}
+            alt={product.name}
+            className="h-20 w-20 object-cover rounded-lg border border-border bg-muted shadow-sm"
+          />
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <h3 className="font-semibold text-foreground text-sm">{product.name}</h3>
+              <span className="text-xs font-mono text-muted-foreground">({product.code})</span>
+            </div>
+            {product.fabric && (
+              <span className="inline-block text-[11px] font-medium text-primary bg-primary/10 px-2 py-0.5 rounded border border-primary/20">
+                Fabric: {product.fabric}
+              </span>
+            )}
+            <p className="text-xs text-muted-foreground line-clamp-2">
+              {product.description || 'Finished garment production model.'}
+            </p>
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <SummaryCard
           title="Total Finished Pieces"

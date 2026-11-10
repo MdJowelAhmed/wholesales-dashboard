@@ -1,7 +1,6 @@
 import React, { useState } from 'react'
-import { useForm } from 'react-hook-form'
+import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
 import { Plus } from 'lucide-react'
 import {
   Dialog,
@@ -15,22 +14,16 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { productsRepository } from '@/mocks/repositories/productsRepository'
 import { toast } from 'sonner'
+import {
+  productFormSchema,
+  ProductFormData,
+  WHOLESALE_SERIES_PRESET,
+} from './productFormSchema'
+import { ProductImageUpload } from './ProductImageUpload'
+import { ProductVariantsFieldArray } from './ProductVariantsFieldArray'
 
-const productSchema = z.object({
-  name: z.string().min(3, 'Product name must be at least 3 characters'),
-  code: z.string().min(2, 'Model/Design code is required'),
-  category: z.string().min(2, 'Category is required'),
-  description: z.string().optional(),
-  initialSize: z.string().min(1, 'Initial variant size is required (e.g. 18, 20, 22)'),
-  initialPricePerPiece: z.number().positive('Price per piece must be greater than 0'),
-  initialCostPerPiece: z.number().min(0, 'Cost cannot be negative').optional(),
-  initialStockPieces: z.number().int().min(0, 'Stock pieces cannot be negative'),
-})
-
-type ProductFormData = z.infer<typeof productSchema>
-
-function generateVariantId(): string {
-  return `var-${Date.now()}-1`
+function generateVariantId(index: number): string {
+  return `var-${Date.now()}-${index + 1}`
 }
 
 interface AddProductDialogProps {
@@ -48,52 +41,75 @@ export function AddProductDialog({
 
   const {
     register,
+    control,
     handleSubmit,
+    setValue,
     reset,
     formState: { errors },
   } = useForm<ProductFormData>({
-    resolver: zodResolver(productSchema),
+    resolver: zodResolver(productFormSchema),
     defaultValues: {
       name: '',
       code: '',
       category: "Kids' Wear",
+      fabric: '100% Combed Cotton',
       description: '',
-      initialSize: '18',
-      initialPricePerPiece: 280,
-      initialCostPerPiece: 175,
-      initialStockPieces: 100,
+      imageUrl: '',
+      variants: [...WHOLESALE_SERIES_PRESET],
     },
   })
+
+  const currentImageUrl = useWatch({ control, name: 'imageUrl' })
 
   const onSubmit = async (data: ProductFormData) => {
     setLoading(true)
     try {
+      const formattedCode = data.code.toUpperCase().trim()
+
+      const variants = data.variants.map((v, index) => {
+        const sanitizedSize = v.size.replace(/\s+/g, '')
+        return {
+          id: generateVariantId(index),
+          sku: `${formattedCode}-${sanitizedSize}`,
+          size: v.size.trim(),
+          color: v.color?.trim() || undefined,
+          pricePerPiece: Number(v.pricePerPiece),
+          costPerPiece: v.costPerPiece ? Number(v.costPerPiece) : 0,
+          stockPieces: Number(v.stockPieces),
+          isActive: true,
+        }
+      })
+
       await productsRepository.createProduct({
-        name: data.name,
-        code: data.code.toUpperCase(),
+        name: data.name.trim(),
+        code: formattedCode,
         category: data.category,
-        description: data.description,
+        fabric: data.fabric?.trim() || undefined,
+        imageUrl: data.imageUrl?.trim() || undefined,
+        description: data.description?.trim() || undefined,
         status: 'active',
-        variants: [
-          {
-            id: generateVariantId(),
-            sku: `${data.code.toUpperCase()}-${data.initialSize}`,
-            size: data.initialSize,
-            pricePerPiece: data.initialPricePerPiece,
-            costPerPiece: data.initialCostPerPiece || 0,
-            stockPieces: data.initialStockPieces,
-            isActive: true,
-          },
-        ],
+        variants,
       })
-      toast.success('Product created successfully', {
-        description: `${data.name} with Size ${data.initialSize} added to catalog.`,
+
+      const totalPcs = variants.reduce((sum, v) => sum + v.stockPieces, 0)
+
+      toast.success('Garment Product Created', {
+        description: `${data.name} (${formattedCode}) with ${variants.length} size variants and ${totalPcs} total pieces added to catalog.`,
       })
-      reset()
+
+      reset({
+        name: '',
+        code: '',
+        category: "Kids' Wear",
+        fabric: '100% Combed Cotton',
+        description: '',
+        imageUrl: '',
+        variants: [...WHOLESALE_SERIES_PRESET],
+      })
       onOpenChange(false)
       onSuccess()
     } catch {
-      toast.error('Failed to create product')
+      toast.error('Failed to create garment product')
     } finally {
       setLoading(false)
     }
@@ -101,7 +117,7 @@ export function AddProductDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Plus className="h-5 w-5 text-primary" />
@@ -109,13 +125,15 @@ export function AddProductDialog({
           </DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 py-2">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1 col-span-2 sm:col-span-1">
-              <label className="text-xs font-semibold text-foreground">
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 py-1">
+          {/* Top Row: Name, Code, Category, Fabric */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <label htmlFor="product-name" className="text-xs font-semibold text-foreground">
                 Product Name *
               </label>
               <Input
+                id="product-name"
                 placeholder="e.g. Boys' Cotton Polo Shirt"
                 {...register('name')}
                 aria-invalid={!!errors.name}
@@ -125,11 +143,12 @@ export function AddProductDialog({
               )}
             </div>
 
-            <div className="space-y-1 col-span-2 sm:col-span-1">
-              <label className="text-xs font-semibold text-foreground">
+            <div className="space-y-1">
+              <label htmlFor="product-code" className="text-xs font-semibold text-foreground">
                 Design / Model Code *
               </label>
               <Input
+                id="product-code"
                 placeholder="e.g. BPS-101"
                 {...register('code')}
                 aria-invalid={!!errors.code}
@@ -138,84 +157,58 @@ export function AddProductDialog({
                 <p className="text-[11px] text-destructive">{errors.code.message}</p>
               )}
             </div>
+
+            <div className="space-y-1">
+              <label htmlFor="product-category" className="text-xs font-semibold text-foreground">
+                Category *
+              </label>
+              <select
+                id="product-category"
+                {...register('category')}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              >
+                <option value="Kids' Wear">Kids' Wear (16-20, 22-26, 28-32, 34-38)</option>
+                <option value="Girls' Wear">Girls' Wear</option>
+                <option value="Boys' Wear">Boys' Wear</option>
+                <option value="Infants' Wear">Infants' Wear</option>
+                <option value="Mens' Wear">Mens' Wear</option>
+              </select>
+            </div>
+
+            <div className="space-y-1">
+              <label htmlFor="product-fabric" className="text-xs font-semibold text-foreground">
+                Fabric / Material
+              </label>
+              <Input
+                id="product-fabric"
+                placeholder="e.g. 100% Pique, 9.5 oz Denim"
+                {...register('fabric')}
+              />
+            </div>
           </div>
 
-          <div className="space-y-1">
-            <label className="text-xs font-semibold text-foreground">Category *</label>
-            <select
-              {...register('category')}
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-            >
-              <option value="Kids' Wear">Kids' Wear (Sizes 18, 20, 22, 24)</option>
-              <option value="Girls' Wear">Girls' Wear</option>
-              <option value="Boys' Wear">Boys' Wear</option>
-              <option value="Infants' Wear">Infants' Wear</option>
-              <option value="Mens' Wear">Mens' Wear</option>
-            </select>
-          </div>
+          {/* Product Image Uploader */}
+          <ProductImageUpload
+            value={currentImageUrl}
+            onChange={(val) => setValue('imageUrl', val, { shouldDirty: true })}
+          />
 
+          {/* Product Description */}
           <div className="space-y-1">
             <label className="text-xs font-semibold text-foreground">Description</label>
             <Textarea
-              placeholder="Fabric composition, design details..."
+              placeholder="Fabric specifications, wash care, stitch details..."
               rows={2}
               {...register('description')}
             />
           </div>
 
-          {/* Initial Variant Information */}
-          <div className="p-3 rounded-lg border border-border bg-muted/20 space-y-3">
-            <div className="text-xs font-bold text-foreground uppercase tracking-wider">
-              Initial Variant & Piece Pricing
-            </div>
-
-            <div className="grid grid-cols-3 gap-2">
-              <div className="space-y-1">
-                <label className="text-[11px] font-medium text-muted-foreground">
-                  Size (e.g. 18, 20, 22) *
-                </label>
-                <Input placeholder="18" {...register('initialSize')} />
-                {errors.initialSize && (
-                  <p className="text-[10px] text-destructive">
-                    {errors.initialSize.message}
-                  </p>
-                )}
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-[11px] font-medium text-muted-foreground">
-                  Price/Piece (৳) *
-                </label>
-                <Input
-                  type="number"
-                  step="any"
-                  placeholder="280"
-                  {...register('initialPricePerPiece', { valueAsNumber: true })}
-                />
-                {errors.initialPricePerPiece && (
-                  <p className="text-[10px] text-destructive">
-                    {errors.initialPricePerPiece.message}
-                  </p>
-                )}
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-[11px] font-medium text-muted-foreground">
-                  Stock (Pieces) *
-                </label>
-                <Input
-                  type="number"
-                  placeholder="100"
-                  {...register('initialStockPieces', { valueAsNumber: true })}
-                />
-                {errors.initialStockPieces && (
-                  <p className="text-[10px] text-destructive">
-                    {errors.initialStockPieces.message}
-                  </p>
-                )}
-              </div>
-            </div>
-          </div>
+          {/* Size Formats & Dynamic Variants Field Array */}
+          <ProductVariantsFieldArray
+            control={control}
+            register={register}
+            errors={errors}
+          />
 
           <DialogFooter className="pt-2">
             <Button

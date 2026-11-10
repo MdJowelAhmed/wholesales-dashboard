@@ -46,9 +46,17 @@ export function ProductsListPage(): React.JSX.Element {
       sortable: true,
       cell: (row) => (
         <div className="flex items-center gap-3">
-          <div className="h-9 w-9 rounded-md bg-secondary text-secondary-foreground flex items-center justify-center font-bold text-xs">
-            <Shirt className="h-4 w-4" />
-          </div>
+          {row.imageUrl ? (
+            <img
+              src={row.imageUrl}
+              alt={row.name}
+              className="h-10 w-10 rounded-md object-cover border border-border"
+            />
+          ) : (
+            <div className="h-10 w-10 rounded-md bg-secondary text-secondary-foreground flex items-center justify-center font-bold text-xs">
+              <Shirt className="h-4 w-4" />
+            </div>
+          )}
           <div>
             <Link
               to={`/products/${row.id}`}
@@ -56,7 +64,15 @@ export function ProductsListPage(): React.JSX.Element {
             >
               {row.name}
             </Link>
-            <div className="text-xs text-muted-foreground">{row.code}</div>
+            <div className="text-xs text-muted-foreground flex items-center gap-1.5">
+              <span>{row.code}</span>
+              {row.fabric && (
+                <>
+                  <span>•</span>
+                  <span>{row.fabric}</span>
+                </>
+              )}
+            </div>
           </div>
         </div>
       ),
