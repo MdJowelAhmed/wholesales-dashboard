@@ -11,6 +11,10 @@ import {
   calculateProductionEfficiency,
   calculateRawMaterialConsumption,
   calculateNetPayrollPayable,
+  toPieces,
+  calculatePieceWage,
+  calculateDozenWage,
+  calculatePnLMetrics,
 } from './financialCalculations'
 
 describe('financialCalculations', () => {
@@ -64,9 +68,8 @@ describe('financialCalculations', () => {
           rateType: 'piece',
           baseRate: 25,
           completedPieces: 80,
-          incentiveAmount: 100,
         })
-      ).toBe(2100)
+      ).toBe(2000)
     })
 
     it('calculates dozen-rate wages correctly (1 dozen = 12 pieces)', () => {
@@ -152,6 +155,42 @@ describe('financialCalculations', () => {
     it('rounds numbers to two decimals correctly', () => {
       expect(roundCurrency(123.456)).toBe(123.46)
       expect(roundCurrency(123.454)).toBe(123.45)
+    })
+  })
+
+  describe('toPieces', () => {
+    it('converts pieces, dozens, and bundles accurately', () => {
+      expect(toPieces(10, 'piece')).toBe(10)
+      expect(toPieces(2, 'dozen')).toBe(24)
+      expect(toPieces(5, 'bundle')).toBe(30)
+      expect(toPieces(3, 'bundle', 10)).toBe(30)
+    })
+  })
+
+  describe('calculatePieceWage and calculateDozenWage', () => {
+    it('calculates wage on good pieces only', () => {
+      expect(calculatePieceWage(50, 12)).toBe(600)
+      expect(calculateDozenWage(24, 120)).toBe(240)
+      expect(calculateDozenWage(18, 120)).toBe(180)
+    })
+  })
+
+  describe('calculatePnLMetrics', () => {
+    it('calculates P&L metrics using actualMaterialCost and without counting unsold consignment', () => {
+      const pnl = calculatePnLMetrics({
+        salesRevenue: 70000,
+        actualMaterialCost: 25000,
+        wages: 15000,
+        expenses: 5000,
+      })
+
+      expect(pnl.grossRevenue).toBe(70000)
+      expect(pnl.actualMaterialCost).toBe(25000)
+      expect(pnl.totalWages).toBe(15000)
+      expect(pnl.totalExpenses).toBe(5000)
+      expect(pnl.operatingExpenses).toBe(20000)
+      expect(pnl.netOperatingProfit).toBe(25000)
+      expect(pnl.profitMargin).toBe(35.71)
     })
   })
 })

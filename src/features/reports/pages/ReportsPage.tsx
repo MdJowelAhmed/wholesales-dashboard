@@ -16,6 +16,7 @@ import { Sale } from '@/types/sales'
 import { FinishedGoodsStockItem } from '@/types/inventory'
 import { Shopkeeper } from '@/types/shopkeepers'
 import { ExpenseRecord, PayrollRecord } from '@/types/finance'
+import { RawMaterial } from '@/types/rawMaterials'
 import { calculatePnLMetrics } from '@/lib/calculations/financialCalculations'
 import { exportToCsv } from '@/lib/utils/csvExport'
 import { toast } from 'sonner'
@@ -27,6 +28,7 @@ import { PnlReportTab } from '../components/PnlReportTab'
 export function ReportsPage() {
   const [sales, setSales] = useState<Sale[]>([])
   const [stock, setStock] = useState<FinishedGoodsStockItem[]>([])
+  const [materials, setMaterials] = useState<RawMaterial[]>([])
   const [shopkeepers, setShopkeepers] = useState<Shopkeeper[]>([])
   const [expenses, setExpenses] = useState<ExpenseRecord[]>([])
   const [payroll, setPayroll] = useState<PayrollRecord[]>([])
@@ -38,15 +40,17 @@ export function ReportsPage() {
     async function loadReportData() {
       try {
         setLoading(true)
-        const [salesData, stockData, skData, expData, pyrData] = await Promise.all([
+        const [salesData, stockData, matData, skData, expData, pyrData] = await Promise.all([
           salesRepository.listSales(),
           inventoryRepository.getFinishedGoodsStock(),
+          inventoryRepository.getRawMaterialsStock(),
           shopkeepersRepository.listShopkeepers(),
           financeRepository.listExpenses(),
           financeRepository.listPayroll(),
         ])
         setSales(salesData)
         setStock(stockData)
+        setMaterials(matData)
         setShopkeepers(skData)
         setExpenses(expData)
         setPayroll(pyrData)
@@ -62,14 +66,14 @@ export function ReportsPage() {
   // Centralized P&L calculation from financialCalculations
   const pnl = useMemo(() => {
     const totalSalesRevenue = sales.reduce((sum, s) => sum + s.totalAmount, 0)
-    const totalDispatchedValue = shopkeepers.reduce((sum, sk) => sum + sk.totalDeliveredValue, 0)
+    const actualMaterialCost = materials.reduce((sum, m) => sum + (m.averageCost || 0) * Math.max(0, m.reorderThreshold || 0), 0)
     const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0)
     const totalWages = payroll.reduce((sum, p) => sum + p.netPayable, 0)
     const finishedGoodsValuation = stock.reduce((sum, item) => sum + item.valuation, 0)
 
     const baseMetrics = calculatePnLMetrics({
       salesRevenue: totalSalesRevenue,
-      dispatchedValue: totalDispatchedValue,
+      actualMaterialCost,
       expenses: totalExpenses,
       wages: totalWages,
     })
@@ -78,7 +82,7 @@ export function ReportsPage() {
       ...baseMetrics,
       finishedGoodsValuation,
     }
-  }, [sales, shopkeepers, stock, expenses, payroll])
+  }, [sales, materials, stock, expenses, payroll])
 
   // CSV Export Handlers
   const handleExportSalesCsv = () => {
@@ -129,9 +133,9 @@ export function ReportsPage() {
 
   const handleExportPnlCsv = () => {
     const data = [
-      { Metric: 'Gross Commercial Revenue (Sales + Wholesale Dispatches)', 'Amount (BDT)': pnl.grossRevenue },
-      { Metric: 'Estimated Cost of Goods Sold (Fabric/Trims @ ~45%)', 'Amount (BDT)': -pnl.estimatedMaterialCost },
-      { Metric: 'Gross Manufacturing Margin', 'Amount (BDT)': pnl.grossRevenue - pnl.estimatedMaterialCost },
+      { Metric: 'Gross Commercial Revenue (Sales)', 'Amount (BDT)': pnl.grossRevenue },
+      { Metric: 'Cost of Raw Materials Consumed', 'Amount (BDT)': -pnl.actualMaterialCost },
+      { Metric: 'Gross Manufacturing Margin', 'Amount (BDT)': pnl.grossRevenue - pnl.actualMaterialCost },
       { Metric: 'Worker Payroll & Tailor Wages', 'Amount (BDT)': -pnl.totalWages },
       { Metric: 'Factory Overhead Expenses', 'Amount (BDT)': -pnl.totalExpenses },
       { Metric: 'Net Operating Profit (EBITDA)', 'Amount (BDT)': pnl.netOperatingProfit },

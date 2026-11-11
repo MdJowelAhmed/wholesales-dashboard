@@ -60,7 +60,7 @@ export const initialEmployees: Employee[] = [
     address: 'Kallyanpur, Dhaka',
     designation: 'Finishing & Quality Inspector',
     joiningDate: '2025-06-01',
-    compensationMethod: 'monthly_plus_incentive',
+    compensationMethod: 'monthly_fixed',
     monthlySalary: 20000,
     totalEarnedWages: 104000,
     totalPaymentsMade: 100000,

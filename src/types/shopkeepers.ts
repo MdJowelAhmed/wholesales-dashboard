@@ -15,6 +15,7 @@ export interface ShopkeeperDeliveryItem {
   returnedPieces: number
   sellableReturnedPieces: number
   damagedReturnedPieces: number
+  soldPieces?: number
 }
 
 export interface ShopkeeperDelivery extends BaseEntity {
@@ -26,6 +27,7 @@ export interface ShopkeeperDelivery extends BaseEntity {
   totalAmount: number
   paidAmount: number
   outstandingAmount: number
+  settledAmount?: number
   notes?: string
 }
 

@@ -4,7 +4,10 @@ import {
   calculateOutstandingBalance,
   roundCurrency,
 } from '@/lib/calculations/financialCalculations'
+import { generateId } from '@/lib/ids'
 import { mockStorage } from '../storage/localStorageAdapter'
+import { ledgerEngine } from './ledgerEngine'
+import { stockEngine } from './stockEngine'
 
 export class SalesRepository {
   public async listSales(): Promise<Sale[]> {
@@ -29,6 +32,19 @@ export class SalesRepository {
 
   public async getCustomerLedger(customerId: string): Promise<CustomerLedgerEntry[]> {
     const db = mockStorage.getDatabase()
+    const entries = ledgerEngine.getPartyLedger(db, 'customer', customerId)
+    if (entries.length > 0) {
+      return entries.map((e) => ({
+        id: e.id,
+        date: e.date,
+        type: e.type === 'payment' ? 'payment' : 'sale',
+        reference: e.refId,
+        description: e.note || `${e.type.toUpperCase()}: ${e.refId}`,
+        debit: e.debit,
+        credit: e.credit,
+        balance: e.balanceAfter ?? e.balance ?? 0,
+      }))
+    }
     return db.customerLedger[customerId] || []
   }
 
@@ -54,9 +70,11 @@ export class SalesRepository {
     paymentMethod: 'cash' | 'bank_transfer' | 'cheque' | 'bkash' | 'nagad'
     notes?: string
   }): Promise<Sale> {
-    const db = mockStorage.getDatabase()
+    let db = mockStorage.getDatabase()
 
     let subtotal = 0
+    const invoiceNumber = `INV-${new Date().getFullYear()}-${generateId().slice(0, 4).toUpperCase()}`
+
     const saleItems: SaleItem[] = input.items.map((item) => {
       const lineTotal = calculateLineTotal(
         item.quantityPieces,
@@ -65,15 +83,8 @@ export class SalesRepository {
       )
       subtotal += lineTotal
 
-      // Deduct pieces from inventory
-      const stockItem = db.finishedGoodsStock.find((st) => st.variantId === item.variantId)
-      if (stockItem) {
-        stockItem.currentPieces = Math.max(0, stockItem.currentPieces - item.quantityPieces)
-        stockItem.valuation = roundCurrency(stockItem.currentPieces * stockItem.pricePerPiece)
-      }
-
       return {
-        id: `sitem-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        id: generateId('sitem'),
         productId: item.productId,
         productName: item.productName,
         variantId: item.variantId,
@@ -86,14 +97,29 @@ export class SalesRepository {
       }
     })
 
+    // Deduct stock immutably via stockEngine
+    for (const item of input.items) {
+      const res = stockEngine.recordMovement(db, {
+        itemType: 'finished_goods',
+        itemId: item.variantId,
+        movementType: 'sale',
+        quantityPieces: item.quantityPieces,
+        unitPrice: item.pricePerPiece,
+        referenceId: invoiceNumber,
+        referenceType: 'sales_invoice',
+        date: input.date,
+        notes: `Sale invoice to ${input.customerName}`,
+      })
+      db = res.db
+    }
+
     const totalDiscount = input.orderDiscount || 0
     const totalAmount = Math.max(0, subtotal - totalDiscount)
     const paidAmount = input.paidAmount || 0
     const balance = calculateOutstandingBalance(totalAmount, paidAmount)
 
-    const invoiceNumber = `INV-${new Date().getFullYear()}-${String(Date.now()).slice(-4)}`
     const sale: Sale = {
-      id: `sale-${Date.now()}`,
+      id: generateId('sale'),
       invoiceNumber,
       date: input.date,
       customerType: input.customerType,
@@ -113,54 +139,41 @@ export class SalesRepository {
       createdAt: new Date().toISOString(),
     }
 
-    db.sales.unshift(sale)
+    db.sales = [sale, ...db.sales]
 
-    // Update customer balances if linked to customer or shopkeeper
+    // Update ledger via ledgerEngine if customer or shopkeeper is linked
     if (input.customerId) {
-      if (input.customerType === 'wholesale_shopkeeper') {
-        const sk = db.shopkeepers.find((s) => s.id === input.customerId)
-        if (sk) {
-          sk.totalDeliveredValue = roundCurrency(sk.totalDeliveredValue + totalAmount)
-          sk.totalPaymentsReceived = roundCurrency(sk.totalPaymentsReceived + paidAmount)
-          sk.outstandingBalance = roundCurrency(sk.outstandingBalance + balance)
-          sk.lastTransactionDate = input.date
+      const partyType =
+        input.customerType === 'wholesale_shopkeeper' ? 'shopkeeper' : 'customer'
 
-          const ledger = db.shopkeeperLedger[sk.id] || []
-          const prevBal = ledger.length > 0 ? ledger[ledger.length - 1].balance : 0
-          ledger.push({
-            id: `skledg-${Date.now()}`,
-            date: input.date,
-            type: 'delivery_credit',
-            reference: invoiceNumber,
-            description: `Sales Invoice (${saleItems.length} items)`,
-            debit: totalAmount,
-            credit: paidAmount,
-            balance: roundCurrency(prevBal + balance),
-          })
-          db.shopkeeperLedger[sk.id] = ledger
-        }
-      } else {
-        const customer = db.customers.find((c) => c.id === input.customerId)
-        if (customer) {
-          customer.totalPurchases = roundCurrency(customer.totalPurchases + totalAmount)
-          customer.totalPayments = roundCurrency(customer.totalPayments + paidAmount)
-          customer.outstandingBalance = roundCurrency(customer.outstandingBalance + balance)
-          customer.lastPurchaseDate = input.date
+      // Record invoice sale debit
+      const res1 = ledgerEngine.appendLedgerEntry(db, {
+        partyType,
+        partyId: input.customerId,
+        date: input.date,
+        type: 'sale',
+        refType: 'sales_invoice',
+        refId: invoiceNumber,
+        debit: totalAmount,
+        credit: 0,
+        note: `Sales Invoice (${saleItems.length} items)`,
+      })
+      db = res1.db
 
-          const ledger = db.customerLedger[customer.id] || []
-          const prevBal = ledger.length > 0 ? ledger[ledger.length - 1].balance : 0
-          ledger.push({
-            id: `cstledg-${Date.now()}`,
-            date: input.date,
-            type: 'sale',
-            reference: invoiceNumber,
-            description: `Sale Invoice (${saleItems.length} items)`,
-            debit: totalAmount,
-            credit: paidAmount,
-            balance: roundCurrency(prevBal + balance),
-          })
-          db.customerLedger[customer.id] = ledger
-        }
+      // Record payment credit if partially or fully paid
+      if (paidAmount > 0) {
+        const res2 = ledgerEngine.appendLedgerEntry(db, {
+          partyType,
+          partyId: input.customerId,
+          date: input.date,
+          type: 'payment',
+          refType: 'receipt',
+          refId: invoiceNumber,
+          debit: 0,
+          credit: paidAmount,
+          note: `Payment at invoice (${input.paymentMethod})`,
+        })
+        db = res2.db
       }
     }
 
@@ -175,7 +188,7 @@ export class SalesRepository {
   }): Promise<Customer> {
     const db = mockStorage.getDatabase()
     const newCustomer: Customer = {
-      id: `cust-${Date.now()}`,
+      id: generateId('cust'),
       name: input.name,
       phone: input.phone,
       address: input.address || 'Dhaka, Bangladesh',
@@ -188,7 +201,7 @@ export class SalesRepository {
     }
     const updatedDb = {
       ...db,
-      customers: [...db.customers, newCustomer],
+      customers: [newCustomer, ...db.customers],
     }
     mockStorage.saveDatabase(updatedDb)
     return newCustomer
@@ -207,25 +220,23 @@ export class SalesRepository {
     if (!customer) throw new Error('Customer not found')
 
     const date = input.date || new Date().toISOString().split('T')[0]
-    customer.totalPayments = roundCurrency(customer.totalPayments + input.amount)
-    customer.outstandingBalance = roundCurrency(customer.outstandingBalance - input.amount)
+    const receiptRef = input.reference || `PAY-${generateId().slice(0, 4).toUpperCase()}`
 
-    const ledger = db.customerLedger[customer.id] || []
-    const lastEntry = ledger[ledger.length - 1]
-    const prevBal = lastEntry ? lastEntry.balance : 0
-    ledger.push({
-      id: `cstledg-${Date.now()}`,
+    customer.totalPayments = roundCurrency(customer.totalPayments + input.amount)
+
+    const { db: updatedDb } = ledgerEngine.appendLedgerEntry(db, {
+      partyType: 'customer',
+      partyId: customer.id,
       date,
       type: 'payment',
-      reference: input.reference || `PAY-${Date.now().toString().slice(-4)}`,
-      description: input.notes || `Payment received (${input.paymentMethod})`,
+      refType: 'receipt',
+      refId: receiptRef,
       debit: 0,
       credit: input.amount,
-      balance: roundCurrency(prevBal - input.amount),
+      note: input.notes || `Payment received (${input.paymentMethod})`,
     })
-    db.customerLedger[customer.id] = ledger
 
-    mockStorage.saveDatabase(db)
+    mockStorage.saveDatabase(updatedDb)
   }
 }
 

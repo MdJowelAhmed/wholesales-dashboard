@@ -6,6 +6,7 @@ import {
   INITIAL_SIZE_ITEMS,
   INITIAL_COLOR_ITEMS,
 } from '@/types/variants'
+import { generateId } from '@/lib/ids'
 import { mockStorage } from '../storage/localStorageAdapter'
 
 export class VariantsRepository {
@@ -32,7 +33,7 @@ export class VariantsRepository {
     if (!db.categoryItems) db.categoryItems = [...INITIAL_CATEGORY_ITEMS]
 
     const newItem: CategoryItem = {
-      id: `cat-${Date.now()}`,
+      id: generateId('cat'),
       name: trimmed,
       description: description?.trim() || undefined,
       createdAt: new Date().toISOString(),
@@ -107,7 +108,7 @@ export class VariantsRepository {
     if (!db.sizeItems) db.sizeItems = [...INITIAL_SIZE_ITEMS]
 
     const newItem: SizeItem = {
-      id: `sz-${Date.now()}`,
+      id: generateId('sz'),
       name: trimmed,
       description: description?.trim() || undefined,
       createdAt: new Date().toISOString(),
@@ -182,7 +183,7 @@ export class VariantsRepository {
     if (!db.colorItems) db.colorItems = [...INITIAL_COLOR_ITEMS]
 
     const newItem: ColorItem = {
-      id: `col-${Date.now()}`,
+      id: generateId('col'),
       name: trimmedName,
       hexCode: hexCode?.trim() || '#3b82f6',
       createdAt: new Date().toISOString(),

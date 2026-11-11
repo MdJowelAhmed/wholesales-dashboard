@@ -1,6 +1,9 @@
 import { ExpenseRecord, PaymentRecord, PayrollRecord } from '@/types/finance'
+import { LedgerEntry } from '@/types/ledger'
 import { roundCurrency } from '@/lib/calculations/financialCalculations'
+import { generateId } from '@/lib/ids'
 import { mockStorage } from '../storage/localStorageAdapter'
+import { ledgerEngine } from './ledgerEngine'
 
 export interface DashboardMetrics {
   todaySales: number
@@ -18,18 +21,49 @@ export class FinanceRepository {
   public async getDashboardMetrics(): Promise<DashboardMetrics> {
     const db = mockStorage.getDatabase()
 
-    // Monthly sales calculation (September/October 2026 dummy transactions)
-    const monthlySales = roundCurrency(
-      db.sales.reduce((sum, s) => sum + s.totalAmount, 0) +
-        Object.values(db.shopkeeperDeliveries)
-          .flat()
-          .reduce((sum, d) => sum + d.totalAmount, 0)
-    )
+    const today = new Date().toISOString().split('T')[0]
+    const currentMonth = today.slice(0, 7)
 
-    // Today sales estimate (most recent sales)
-    const todaySales = roundCurrency(
-      db.sales.slice(0, 1).reduce((sum, s) => sum + s.totalAmount, 0)
-    )
+    // Direct retail/own-shop sales
+    const directSalesToday = db.sales
+      .filter((s) => s.date === today)
+      .reduce((sum, s) => sum + s.totalAmount, 0)
+    const directSalesMonth = db.sales
+      .filter((s) => s.date.startsWith(currentMonth))
+      .reduce((sum, s) => sum + s.totalAmount, 0)
+
+    // Wholesale deliveries: credit sales only (consignment only counts when settled)
+    const allDeliveries = Object.values(db.shopkeeperDeliveries || {}).flat()
+    const creditDeliveriesToday = allDeliveries
+      .filter((d) => d.transactionType === 'credit_sale' && d.date === today)
+      .reduce((sum, d) => sum + d.totalAmount, 0)
+    const creditDeliveriesMonth = allDeliveries
+      .filter((d) => d.transactionType === 'credit_sale' && d.date.startsWith(currentMonth))
+      .reduce((sum, d) => sum + d.totalAmount, 0)
+
+    // Settled consignment sales from unified ledger
+    const ledgerEntries: LedgerEntry[] = db.ledgerEntries || []
+    const settledToday = ledgerEntries
+      .filter(
+        (l: LedgerEntry) =>
+          l.partyType === 'shopkeeper' &&
+          l.type === 'sale' &&
+          l.refType === 'consignment_settlement' &&
+          l.date === today
+      )
+      .reduce((sum: number, l: LedgerEntry) => sum + l.debit, 0)
+    const settledMonth = ledgerEntries
+      .filter(
+        (l: LedgerEntry) =>
+          l.partyType === 'shopkeeper' &&
+          l.type === 'sale' &&
+          l.refType === 'consignment_settlement' &&
+          l.date.startsWith(currentMonth)
+      )
+      .reduce((sum: number, l: LedgerEntry) => sum + l.debit, 0)
+
+    const todaySales = roundCurrency(directSalesToday + creditDeliveriesToday + settledToday)
+    const monthlySales = roundCurrency(directSalesMonth + creditDeliveriesMonth + settledMonth)
 
     // Finished goods stock & valuation
     const totalFinishedGoodsPieces = db.finishedGoodsStock.reduce(
@@ -87,15 +121,15 @@ export class FinanceRepository {
     input: Omit<ExpenseRecord, 'id' | 'expenseNumber' | 'createdAt'>
   ): Promise<ExpenseRecord> {
     const db = mockStorage.getDatabase()
-    const expenseNumber = `EXP-${new Date().getFullYear()}-${String(Date.now()).slice(-4)}`
+    const expenseNumber = `EXP-${new Date().getFullYear()}-${generateId().slice(0, 4).toUpperCase()}`
     const expense: ExpenseRecord = {
       ...input,
-      id: `exp-${Date.now()}`,
+      id: generateId('exp'),
       expenseNumber,
       amount: roundCurrency(input.amount),
       createdAt: new Date().toISOString(),
     }
-    db.expenses.unshift(expense)
+    db.expenses = [expense, ...db.expenses]
     mockStorage.saveDatabase(db)
     return expense
   }
@@ -116,9 +150,9 @@ export class FinanceRepository {
     notes?: string
   }): Promise<PaymentRecord> {
     const db = mockStorage.getDatabase()
-    const receiptNumber = `RCP-${new Date().getFullYear()}-${Date.now().toString().slice(-4)}`
+    const receiptNumber = `RCP-${new Date().getFullYear()}-${generateId().slice(0, 4).toUpperCase()}`
     const payment: PaymentRecord = {
-      id: `pay-${Date.now()}`,
+      id: generateId('pay'),
       receiptNumber,
       date: input.date,
       partyType: input.partyType,
@@ -130,93 +164,47 @@ export class FinanceRepository {
       notes: input.notes,
       createdAt: new Date().toISOString(),
     }
-    db.payments.unshift(payment)
+    db.payments = [payment, ...db.payments]
 
-    // Synchronize balance with party
+    // Synchronize balance and ledger using unified ledgerEngine
+    const isPayableParty = input.partyType === 'supplier' || input.partyType === 'employee'
+    const { db: updatedDb } = ledgerEngine.appendLedgerEntry(db, {
+      partyType: input.partyType,
+      partyId: input.partyId,
+      date: input.date,
+      type: 'payment',
+      refType: 'receipt',
+      refId: receiptNumber,
+      debit: isPayableParty ? input.amount : 0,
+      credit: !isPayableParty ? input.amount : 0,
+      note: `Payment received (${input.paymentMethod}): ${input.reference || input.notes || 'N/A'}`,
+    })
+
+    // Synchronize historical stats on party
     if (input.partyType === 'shopkeeper') {
-      const sk = db.shopkeepers.find((s) => s.id === input.partyId)
+      const sk = updatedDb.shopkeepers.find((s) => s.id === input.partyId)
       if (sk) {
         sk.totalPaymentsReceived = roundCurrency(sk.totalPaymentsReceived + input.amount)
-        sk.outstandingBalance = roundCurrency(Math.max(0, sk.outstandingBalance - input.amount))
         sk.lastTransactionDate = input.date
-
-        const ledger = db.shopkeeperLedger[sk.id] || []
-        const prevBal = ledger.length > 0 ? ledger[ledger.length - 1].balance : 0
-        ledger.push({
-          id: `skledg-${Date.now()}`,
-          date: input.date,
-          type: 'payment_received',
-          reference: receiptNumber,
-          description: `Payment received (${input.paymentMethod}): ${input.reference || 'N/A'}`,
-          debit: 0,
-          credit: input.amount,
-          balance: roundCurrency(Math.max(0, prevBal - input.amount)),
-        })
-        db.shopkeeperLedger[sk.id] = ledger
       }
     } else if (input.partyType === 'customer') {
-      const c = db.customers.find((cust) => cust.id === input.partyId)
+      const c = updatedDb.customers.find((cust) => cust.id === input.partyId)
       if (c) {
         c.totalPayments = roundCurrency(c.totalPayments + input.amount)
-        c.outstandingBalance = roundCurrency(Math.max(0, c.outstandingBalance - input.amount))
-
-        const ledger = db.customerLedger[c.id] || []
-        const prevBal = ledger.length > 0 ? ledger[ledger.length - 1].balance : 0
-        ledger.push({
-          id: `cstledg-${Date.now()}`,
-          date: input.date,
-          type: 'payment',
-          reference: receiptNumber,
-          description: `Customer payment (${input.paymentMethod}): ${input.notes || ''}`,
-          debit: 0,
-          credit: input.amount,
-          balance: roundCurrency(Math.max(0, prevBal - input.amount)),
-        })
-        db.customerLedger[c.id] = ledger
       }
     } else if (input.partyType === 'supplier') {
-      const sup = db.suppliers.find((s) => s.id === input.partyId)
+      const sup = updatedDb.suppliers.find((s) => s.id === input.partyId)
       if (sup) {
         sup.totalPayments = roundCurrency(sup.totalPayments + input.amount)
-        sup.outstandingPayable = roundCurrency(Math.max(0, sup.outstandingPayable - input.amount))
-
-        const ledger = db.supplierLedger[sup.id] || []
-        const prevBal = ledger.length > 0 ? ledger[ledger.length - 1].balance : 0
-        ledger.push({
-          id: `sledg-${Date.now()}`,
-          date: input.date,
-          type: 'payment',
-          description: `Supplier payment (${input.paymentMethod}): ${input.reference || ''}`,
-          debit: input.amount,
-          credit: 0,
-          balance: roundCurrency(Math.max(0, prevBal - input.amount)),
-        })
-        db.supplierLedger[sup.id] = ledger
       }
     } else if (input.partyType === 'employee') {
-      const emp = db.employees.find((e) => e.id === input.partyId)
+      const emp = updatedDb.employees.find((e) => e.id === input.partyId)
       if (emp) {
         emp.totalPaymentsMade = roundCurrency(emp.totalPaymentsMade + input.amount)
-        emp.currentPayableBalance = roundCurrency(
-          Math.max(0, emp.currentPayableBalance - input.amount)
-        )
-
-        const ledger = db.employeeLedger[emp.id] || []
-        const prevBal = ledger.length > 0 ? ledger[ledger.length - 1].balance : 0
-        ledger.push({
-          id: `eledg-${Date.now()}`,
-          date: input.date,
-          type: 'payment_issued',
-          description: `Wage/salary disbursement (${input.paymentMethod})`,
-          debit: input.amount,
-          credit: 0,
-          balance: roundCurrency(Math.max(0, prevBal - input.amount)),
-        })
-        db.employeeLedger[emp.id] = ledger
       }
     }
 
-    mockStorage.saveDatabase(db)
+    mockStorage.saveDatabase(updatedDb)
     return payment
   }
 
@@ -226,7 +214,7 @@ export class FinanceRepository {
   }
 
   public async generatePayroll(period: string): Promise<PayrollRecord[]> {
-    const db = mockStorage.getDatabase()
+    let db = mockStorage.getDatabase()
     const created: PayrollRecord[] = []
 
     for (const emp of db.employees) {
@@ -236,7 +224,7 @@ export class FinanceRepository {
       )
       if (existing) continue
 
-      const isMonthly = emp.compensationMethod === 'monthly_fixed' || emp.compensationMethod === 'monthly_plus_incentive'
+      const isMonthly = emp.compensationMethod === 'monthly_fixed'
       const monthlySalary = isMonthly ? emp.monthlySalary || 15000 : 0
       const pieceRateEarnings = !isMonthly
         ? roundCurrency(emp.totalEarnedWages > 0 ? emp.totalEarnedWages : 16500)
@@ -247,7 +235,7 @@ export class FinanceRepository {
       const netPayable = roundCurrency(monthlySalary + pieceRateEarnings + incentives - advancesDeducted)
 
       const pyr: PayrollRecord = {
-        id: `pyr-${Date.now()}-${emp.id}`,
+        id: generateId('pyr'),
         period,
         employeeId: emp.id,
         employeeName: emp.name,
@@ -265,23 +253,24 @@ export class FinanceRepository {
         createdAt: new Date().toISOString(),
       }
 
-      db.payroll.unshift(pyr)
+      db.payroll = [pyr, ...db.payroll]
       created.push(pyr)
 
-      // Add wage credit to employee ledger
-      const ledger = db.employeeLedger[emp.id] || []
-      const prevBal = ledger.length > 0 ? ledger[ledger.length - 1].balance : 0
-      ledger.push({
-        id: `eledg-${Date.now()}`,
-        date: new Date().toISOString().split('T')[0],
-        type: isMonthly ? 'salary_credited' : 'wage_earned',
-        description: `Payroll Generated: ${period}`,
-        debit: 0,
-        credit: netPayable,
-        balance: roundCurrency(prevBal + netPayable),
-      })
-      db.employeeLedger[emp.id] = ledger
-      emp.currentPayableBalance = roundCurrency(emp.currentPayableBalance + netPayable)
+      // Add wage credit to employee ledger via ledgerEngine
+      if (netPayable > 0) {
+        const { db: updatedDb } = ledgerEngine.appendLedgerEntry(db, {
+          partyType: 'employee',
+          partyId: emp.id,
+          date: new Date().toISOString().split('T')[0],
+          type: isMonthly ? 'salary' : 'work',
+          refType: 'payroll',
+          refId: pyr.id,
+          debit: 0,
+          credit: netPayable,
+          note: `Payroll Generated: ${period}`,
+        })
+        db = updatedDb
+      }
     }
 
     mockStorage.saveDatabase(db)

@@ -11,7 +11,10 @@ import {
   calculateReturnCredit,
   roundCurrency,
 } from '@/lib/calculations/financialCalculations'
+import { generateId } from '@/lib/ids'
 import { mockStorage } from '../storage/localStorageAdapter'
+import { ledgerEngine } from './ledgerEngine'
+import { stockEngine } from './stockEngine'
 
 export interface RecordDeliveryInput {
   shopkeeperId: string
@@ -27,6 +30,19 @@ export interface RecordDeliveryInput {
     pricePerPiece: number
   }>
   paidAmount?: number
+  notes?: string
+}
+
+export interface SettleConsignmentItemInput {
+  variantId: string
+  soldPieces: number
+}
+
+export interface SettleConsignmentInput {
+  shopkeeperId: string
+  deliveryId: string
+  items: SettleConsignmentItemInput[]
+  date?: string
   notes?: string
 }
 
@@ -87,6 +103,26 @@ export class ShopkeepersRepository {
 
   public async getLedger(shopkeeperId: string): Promise<ShopkeeperLedgerEntry[]> {
     const db = mockStorage.getDatabase()
+    const entries = ledgerEngine.getPartyLedger(db, 'shopkeeper', shopkeeperId)
+    if (entries.length > 0) {
+      return entries.map((e) => {
+        let type: ShopkeeperLedgerEntry['type'] = 'adjustment'
+        if (e.type === 'sale') type = 'delivery_credit'
+        else if (e.type === 'payment') type = 'payment_received'
+        else if (e.type === 'return') type = 'return_credit'
+
+        return {
+          id: e.id,
+          date: e.date,
+          type,
+          reference: e.refId,
+          description: e.note || `${e.type.toUpperCase()}: ${e.refId}`,
+          debit: e.debit,
+          credit: e.credit,
+          balance: e.balanceAfter ?? e.balance ?? 0,
+        }
+      })
+    }
     return db.shopkeeperLedger[shopkeeperId] || []
   }
 
@@ -106,7 +142,7 @@ export class ShopkeepersRepository {
     const db = mockStorage.getDatabase()
     const newShopkeeper: Shopkeeper = {
       ...data,
-      id: `sk-${Date.now()}`,
+      id: generateId('sk'),
       totalDeliveredValue: 0,
       totalPaymentsReceived: 0,
       totalReturnAdjustments: 0,
@@ -115,7 +151,7 @@ export class ShopkeepersRepository {
       lastTransactionDate: new Date().toISOString().split('T')[0],
       createdAt: new Date().toISOString(),
     }
-    db.shopkeepers.unshift(newShopkeeper)
+    db.shopkeepers = [newShopkeeper, ...db.shopkeepers]
     db.shopkeeperDeliveries[newShopkeeper.id] = []
     db.shopkeeperPayments[newShopkeeper.id] = []
     db.shopkeeperReturns[newShopkeeper.id] = []
@@ -125,27 +161,21 @@ export class ShopkeepersRepository {
   }
 
   public async recordDelivery(input: RecordDeliveryInput): Promise<ShopkeeperDelivery> {
-    const db = mockStorage.getDatabase()
+    let db = mockStorage.getDatabase()
     const shopkeeper = db.shopkeepers.find((s) => s.id === input.shopkeeperId)
     if (!shopkeeper) throw new Error(`Shopkeeper not found: ${input.shopkeeperId}`)
 
     let totalPieces = 0
     let totalAmount = 0
+    const deliveryNumber = `DLV-${new Date().getFullYear()}-${generateId().slice(0, 4).toUpperCase()}`
 
     const deliveryItems = input.items.map((item) => {
       const lineTotal = calculateLineTotal(item.quantityPieces, item.pricePerPiece)
       totalPieces += item.quantityPieces
       totalAmount += lineTotal
 
-      // Deduct from finished goods inventory stock
-      const stockItem = db.finishedGoodsStock.find((st) => st.variantId === item.variantId)
-      if (stockItem) {
-        stockItem.currentPieces = Math.max(0, stockItem.currentPieces - item.quantityPieces)
-        stockItem.valuation = roundCurrency(stockItem.currentPieces * stockItem.pricePerPiece)
-      }
-
       return {
-        id: `ditem-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        id: generateId('ditem'),
         productId: item.productId,
         productName: item.productName,
         variantId: item.variantId,
@@ -157,12 +187,28 @@ export class ShopkeepersRepository {
         returnedPieces: 0,
         sellableReturnedPieces: 0,
         damagedReturnedPieces: 0,
+        soldPieces: 0,
       }
     })
 
+    // Record stock movement for each item via stockEngine
+    for (const item of input.items) {
+      const res = stockEngine.recordMovement(db, {
+        itemType: 'finished_goods',
+        itemId: item.variantId,
+        movementType: input.transactionType === 'consignment' ? 'consignment_out' : 'sale',
+        quantityPieces: item.quantityPieces,
+        unitPrice: item.pricePerPiece,
+        referenceId: deliveryNumber,
+        referenceType: 'delivery',
+        date: input.date,
+        notes: `${input.transactionType === 'consignment' ? 'Consignment' : 'Credit sale'} delivery to ${shopkeeper.shopName}`,
+      })
+      db = res.db
+    }
+
     const initialPaid = input.paidAmount || 0
-    const deliveryId = `deliv-${Date.now()}`
-    const deliveryNumber = `DLV-${new Date().getFullYear()}-${String(Date.now()).slice(-4)}`
+    const deliveryId = generateId('deliv')
 
     const delivery: ShopkeeperDelivery = {
       id: deliveryId,
@@ -173,49 +219,37 @@ export class ShopkeepersRepository {
       totalPieces,
       totalAmount: roundCurrency(totalAmount),
       paidAmount: initialPaid,
-      outstandingAmount: roundCurrency(totalAmount - initialPaid),
+      outstandingAmount:
+        input.transactionType === 'credit_sale'
+          ? roundCurrency(totalAmount - initialPaid)
+          : 0,
+      settledAmount: 0,
       notes: input.notes,
       createdAt: new Date().toISOString(),
     }
 
-    if (!db.shopkeeperDeliveries[shopkeeper.id]) {
-      db.shopkeeperDeliveries[shopkeeper.id] = []
-    }
-    db.shopkeeperDeliveries[shopkeeper.id].unshift(delivery)
-
-    // Update shopkeeper balances
+    db.shopkeeperDeliveries[shopkeeper.id] = [delivery, ...(db.shopkeeperDeliveries[shopkeeper.id] || [])]
     shopkeeper.totalDeliveredValue = roundCurrency(shopkeeper.totalDeliveredValue + totalAmount)
     shopkeeper.lastTransactionDate = input.date
 
     if (input.transactionType === 'consignment') {
       shopkeeper.consignmentPiecesHeld += totalPieces
+      mockStorage.saveDatabase(db)
     } else {
-      shopkeeper.outstandingBalance = roundCurrency(shopkeeper.outstandingBalance + totalAmount)
+      const { db: updatedDb } = ledgerEngine.appendLedgerEntry(db, {
+        partyType: 'shopkeeper',
+        partyId: shopkeeper.id,
+        date: input.date,
+        type: 'sale',
+        refType: 'delivery',
+        refId: deliveryNumber,
+        debit: totalAmount,
+        credit: 0,
+        note: `Credit Delivery: ${totalPieces} pcs garments`,
+      })
+      mockStorage.saveDatabase(updatedDb)
     }
 
-    // Ledger entry for delivery
-    const ledger = db.shopkeeperLedger[shopkeeper.id] || []
-    const previousBalance = ledger.length > 0 ? ledger[ledger.length - 1].balance : 0
-    const newBalance = roundCurrency(
-      input.transactionType === 'credit_sale' ? previousBalance + totalAmount : previousBalance
-    )
-
-    const ledgerEntry: ShopkeeperLedgerEntry = {
-      id: `skledg-${Date.now()}`,
-      date: input.date,
-      type: input.transactionType === 'consignment' ? 'consignment_issue' : 'delivery_credit',
-      reference: deliveryNumber,
-      description: `${
-        input.transactionType === 'consignment' ? 'Consignment Delivery' : 'Credit Delivery'
-      }: ${totalPieces} pcs garments`,
-      debit: input.transactionType === 'credit_sale' ? totalAmount : 0,
-      credit: 0,
-      balance: newBalance,
-    }
-    ledger.push(ledgerEntry)
-    db.shopkeeperLedger[shopkeeper.id] = ledger
-
-    // If an initial payment was made at delivery
     if (initialPaid > 0) {
       await this.recordPayment({
         shopkeeperId: shopkeeper.id,
@@ -224,11 +258,74 @@ export class ShopkeepersRepository {
         paymentMethod: 'cash',
         notes: `Initial payment on ${deliveryNumber}`,
       })
-    } else {
-      mockStorage.saveDatabase(db)
     }
 
     return delivery
+  }
+
+  public async settleConsignment(input: SettleConsignmentInput): Promise<{
+    delivery: ShopkeeperDelivery
+    settledAmount: number
+    settledPieces: number
+  }> {
+    const db = mockStorage.getDatabase()
+    const shopkeeper = db.shopkeepers.find((s) => s.id === input.shopkeeperId)
+    if (!shopkeeper) throw new Error(`Shopkeeper not found: ${input.shopkeeperId}`)
+
+    const deliveries = db.shopkeeperDeliveries[shopkeeper.id] || []
+    const delivery = deliveries.find((d) => d.id === input.deliveryId)
+    if (!delivery) throw new Error(`Delivery not found: ${input.deliveryId}`)
+    if (delivery.transactionType !== 'consignment') {
+      throw new Error(`Delivery ${delivery.deliveryNumber} is not a consignment delivery`)
+    }
+
+    let settledAmount = 0
+    let settledPieces = 0
+    const settleDate = input.date || new Date().toISOString().split('T')[0]
+
+    for (const itemInput of input.items) {
+      if (itemInput.soldPieces <= 0) continue
+      const dItem = delivery.items.find((i) => i.variantId === itemInput.variantId)
+      if (!dItem) throw new Error(`Variant ${itemInput.variantId} not found in delivery`)
+
+      const unsoldPieces = dItem.quantityPieces - dItem.returnedPieces - (dItem.soldPieces || 0)
+      if (itemInput.soldPieces > unsoldPieces) {
+        throw new Error(
+          `Cannot settle ${itemInput.soldPieces} pcs for ${dItem.productName}. Only ${unsoldPieces} unsold pcs remain.`
+        )
+      }
+
+      dItem.soldPieces = (dItem.soldPieces || 0) + itemInput.soldPieces
+      const lineSettled = calculateLineTotal(itemInput.soldPieces, dItem.pricePerPiece)
+      settledAmount += lineSettled
+      settledPieces += itemInput.soldPieces
+    }
+
+    if (settledPieces === 0) {
+      throw new Error('No pieces to settle')
+    }
+
+    settledAmount = roundCurrency(settledAmount)
+    delivery.settledAmount = roundCurrency((delivery.settledAmount || 0) + settledAmount)
+    delivery.outstandingAmount = roundCurrency(delivery.outstandingAmount + settledAmount)
+
+    shopkeeper.consignmentPiecesHeld = Math.max(0, shopkeeper.consignmentPiecesHeld - settledPieces)
+    shopkeeper.lastTransactionDate = settleDate
+
+    const { db: updatedDb } = ledgerEngine.appendLedgerEntry(db, {
+      partyType: 'shopkeeper',
+      partyId: shopkeeper.id,
+      date: settleDate,
+      type: 'sale',
+      refType: 'consignment_settlement',
+      refId: delivery.deliveryNumber,
+      debit: settledAmount,
+      credit: 0,
+      note: input.notes || `Consignment settlement: ${settledPieces} pcs from ${delivery.deliveryNumber}`,
+    })
+
+    mockStorage.saveDatabase(updatedDb)
+    return { delivery, settledAmount, settledPieces }
   }
 
   public async recordPayment(input: RecordShopkeeperPaymentInput): Promise<ShopkeeperPayment> {
@@ -236,9 +333,9 @@ export class ShopkeepersRepository {
     const shopkeeper = db.shopkeepers.find((s) => s.id === input.shopkeeperId)
     if (!shopkeeper) throw new Error(`Shopkeeper not found: ${input.shopkeeperId}`)
 
-    const receiptNumber = `RCP-SK-${Date.now().toString().slice(-4)}`
+    const receiptNumber = `RCP-SK-${generateId().slice(0, 4).toUpperCase()}`
     const payment: ShopkeeperPayment = {
-      id: `skpay-${Date.now()}`,
+      id: generateId('skpay'),
       receiptNumber,
       date: input.date,
       amount: roundCurrency(input.amount),
@@ -248,40 +345,28 @@ export class ShopkeepersRepository {
       createdAt: new Date().toISOString(),
     }
 
-    if (!db.shopkeeperPayments[shopkeeper.id]) {
-      db.shopkeeperPayments[shopkeeper.id] = []
-    }
-    db.shopkeeperPayments[shopkeeper.id].unshift(payment)
-
+    db.shopkeeperPayments[shopkeeper.id] = [payment, ...(db.shopkeeperPayments[shopkeeper.id] || [])]
     shopkeeper.totalPaymentsReceived = roundCurrency(shopkeeper.totalPaymentsReceived + input.amount)
-    shopkeeper.outstandingBalance = roundCurrency(
-      Math.max(0, shopkeeper.outstandingBalance - input.amount)
-    )
     shopkeeper.lastTransactionDate = input.date
 
-    // Ledger update
-    const ledger = db.shopkeeperLedger[shopkeeper.id] || []
-    const previousBalance = ledger.length > 0 ? ledger[ledger.length - 1].balance : 0
-    const newBalance = roundCurrency(Math.max(0, previousBalance - input.amount))
-
-    ledger.push({
-      id: `skledg-${Date.now()}`,
+    const { db: updatedDb } = ledgerEngine.appendLedgerEntry(db, {
+      partyType: 'shopkeeper',
+      partyId: shopkeeper.id,
       date: input.date,
-      type: 'payment_received',
-      reference: receiptNumber,
-      description: `Payment received (${input.paymentMethod}): ${input.reference || 'N/A'}`,
+      type: 'payment',
+      refType: 'receipt',
+      refId: receiptNumber,
       debit: 0,
       credit: input.amount,
-      balance: newBalance,
+      note: `Payment received (${input.paymentMethod}): ${input.reference || 'N/A'}`,
     })
-    db.shopkeeperLedger[shopkeeper.id] = ledger
 
-    mockStorage.saveDatabase(db)
+    mockStorage.saveDatabase(updatedDb)
     return payment
   }
 
   public async recordReturn(input: RecordShopkeeperReturnInput): Promise<ShopkeeperReturnRecord> {
-    const db = mockStorage.getDatabase()
+    let db = mockStorage.getDatabase()
     const shopkeeper = db.shopkeepers.find((s) => s.id === input.shopkeeperId)
     if (!shopkeeper) throw new Error(`Shopkeeper not found: ${input.shopkeeperId}`)
 
@@ -292,8 +377,7 @@ export class ShopkeepersRepository {
     const item = delivery.items.find((i) => i.variantId === input.variantId)
     if (!item) throw new Error(`Product variant not found in delivery: ${input.variantId}`)
 
-    // Validate that return quantity does not exceed eligible quantity!
-    const remainingEligible = item.quantityPieces - item.returnedPieces
+    const remainingEligible = item.quantityPieces - item.returnedPieces - (item.soldPieces || 0)
     if (input.returnQuantityPieces <= 0) {
       throw new Error('Return quantity must be greater than zero')
     }
@@ -305,30 +389,16 @@ export class ShopkeepersRepository {
 
     const creditAmount = calculateReturnCredit(input.returnQuantityPieces, item.pricePerPiece)
 
-    // Update delivery item
     item.returnedPieces += input.returnQuantityPieces
     if (input.condition === 'sellable') {
       item.sellableReturnedPieces += input.returnQuantityPieces
-
-      // Return to sellable finished goods inventory!
-      const stockItem = db.finishedGoodsStock.find((st) => st.variantId === input.variantId)
-      if (stockItem) {
-        stockItem.currentPieces += input.returnQuantityPieces
-        stockItem.valuation = roundCurrency(stockItem.currentPieces * stockItem.pricePerPiece)
-      }
     } else {
       item.damagedReturnedPieces += input.returnQuantityPieces
     }
 
-    // Update delivery outstanding
-    delivery.outstandingAmount = roundCurrency(
-      Math.max(0, delivery.outstandingAmount - creditAmount)
-    )
-
-    // Create return record
-    const returnNumber = `RET-${Date.now().toString().slice(-4)}`
+    const returnNumber = `RET-${generateId().slice(0, 4).toUpperCase()}`
     const returnRecord: ShopkeeperReturnRecord = {
-      id: `skret-${Date.now()}`,
+      id: generateId('skret'),
       returnNumber,
       date: new Date().toISOString().split('T')[0],
       deliveryId: delivery.id,
@@ -344,39 +414,55 @@ export class ShopkeepersRepository {
       createdAt: new Date().toISOString(),
     }
 
-    if (!db.shopkeeperReturns[shopkeeper.id]) {
-      db.shopkeeperReturns[shopkeeper.id] = []
-    }
-    db.shopkeeperReturns[shopkeeper.id].unshift(returnRecord)
+    db.shopkeeperReturns[shopkeeper.id] = [returnRecord, ...(db.shopkeeperReturns[shopkeeper.id] || [])]
 
-    // Update shopkeeper balances
-    shopkeeper.totalReturnAdjustments = roundCurrency(shopkeeper.totalReturnAdjustments + creditAmount)
-    shopkeeper.outstandingBalance = roundCurrency(
-      Math.max(0, shopkeeper.outstandingBalance - creditAmount)
-    )
     if (delivery.transactionType === 'consignment') {
       shopkeeper.consignmentPiecesHeld = Math.max(
         0,
         shopkeeper.consignmentPiecesHeld - input.returnQuantityPieces
       )
+      const res = stockEngine.recordMovement(db, {
+        itemType: 'finished_goods',
+        itemId: input.variantId,
+        movementType: 'consignment_return',
+        quantityPieces: input.returnQuantityPieces,
+        unitPrice: item.pricePerPiece,
+        referenceId: returnNumber,
+        referenceType: 'sales_return',
+        date: returnRecord.date,
+        notes: `Consignment return (${input.condition}): ${input.reason}`,
+      })
+      db = res.db
+    } else {
+      delivery.outstandingAmount = roundCurrency(delivery.outstandingAmount - creditAmount)
+      shopkeeper.totalReturnAdjustments = roundCurrency(shopkeeper.totalReturnAdjustments + creditAmount)
+
+      const res = stockEngine.recordMovement(db, {
+        itemType: 'finished_goods',
+        itemId: input.variantId,
+        movementType: 'sales_return',
+        quantityPieces: input.returnQuantityPieces,
+        unitPrice: item.pricePerPiece,
+        referenceId: returnNumber,
+        referenceType: 'sales_return',
+        date: returnRecord.date,
+        notes: `Sales return (${input.condition}): ${input.reason}`,
+      })
+      db = res.db
+
+      const { db: updatedDb } = ledgerEngine.appendLedgerEntry(db, {
+        partyType: 'shopkeeper',
+        partyId: shopkeeper.id,
+        date: returnRecord.date,
+        type: 'return',
+        refType: 'return',
+        refId: returnNumber,
+        debit: 0,
+        credit: creditAmount,
+        note: `Return credit (${input.condition}): ${input.returnQuantityPieces} pcs @ ৳${item.pricePerPiece}/pc`,
+      })
+      db = updatedDb
     }
-
-    // Ledger update
-    const ledger = db.shopkeeperLedger[shopkeeper.id] || []
-    const previousBalance = ledger.length > 0 ? ledger[ledger.length - 1].balance : 0
-    const newBalance = roundCurrency(Math.max(0, previousBalance - creditAmount))
-
-    ledger.push({
-      id: `skledg-${Date.now()}`,
-      date: returnRecord.date,
-      type: 'return_credit',
-      reference: returnNumber,
-      description: `Return credit (${input.condition}): ${input.returnQuantityPieces} pcs @ ৳${item.pricePerPiece}/pc`,
-      debit: 0,
-      credit: creditAmount,
-      balance: newBalance,
-    })
-    db.shopkeeperLedger[shopkeeper.id] = ledger
 
     mockStorage.saveDatabase(db)
     return returnRecord

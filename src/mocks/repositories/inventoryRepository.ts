@@ -1,7 +1,7 @@
 import { FinishedGoodsStockItem, InventoryMovement } from '@/types/inventory'
 import { RawMaterial } from '@/types/rawMaterials'
-import { roundCurrency } from '@/lib/calculations/financialCalculations'
 import { mockStorage } from '../storage/localStorageAdapter'
+import { stockEngine } from './stockEngine'
 
 export class InventoryRepository {
   public async getFinishedGoodsStock(): Promise<FinishedGoodsStockItem[]> {
@@ -28,23 +28,17 @@ export class InventoryRepository {
     const item = db.finishedGoodsStock.find((s) => s.variantId === input.variantId)
     if (!item) throw new Error(`Stock variant not found: ${input.variantId}`)
 
-    item.currentPieces = Math.max(0, item.currentPieces + input.quantityChange)
-    item.valuation = roundCurrency(item.currentPieces * item.pricePerPiece)
-
-    db.inventoryMovements.unshift({
-      id: `inv-mov-${Date.now()}`,
-      date: new Date().toISOString().split('T')[0],
+    const { db: updatedDb } = stockEngine.recordMovement(db, {
       itemType: 'finished_goods',
-      itemId: item.variantId,
-      itemName: `${item.productName} (Size ${item.size})`,
+      itemId: input.variantId,
       movementType: 'adjustment',
-      quantityChange: input.quantityChange,
-      unit: 'pieces',
+      quantityPieces: input.quantityChange,
+      unitPrice: item.pricePerPiece,
+      date: new Date().toISOString().split('T')[0],
       notes: input.notes,
-      createdAt: new Date().toISOString(),
     })
 
-    mockStorage.saveDatabase(db)
+    mockStorage.saveDatabase(updatedDb)
   }
 
   public async recordRawMaterialAdjustment(input: {
@@ -56,22 +50,16 @@ export class InventoryRepository {
     const material = db.materials.find((m) => m.id === input.materialId)
     if (!material) throw new Error(`Raw material not found: ${input.materialId}`)
 
-    material.availableQuantity = Math.max(0, material.availableQuantity + input.quantityChange)
-
-    db.inventoryMovements.unshift({
-      id: `inv-mov-${Date.now()}`,
-      date: new Date().toISOString().split('T')[0],
+    const { db: updatedDb } = stockEngine.recordMovement(db, {
       itemType: 'raw_material',
-      itemId: material.id,
-      itemName: material.name,
+      itemId: input.materialId,
       movementType: 'adjustment',
-      quantityChange: input.quantityChange,
-      unit: material.baseUnit,
+      quantityPieces: input.quantityChange,
+      date: new Date().toISOString().split('T')[0],
       notes: input.notes,
-      createdAt: new Date().toISOString(),
     })
 
-    mockStorage.saveDatabase(db)
+    mockStorage.saveDatabase(updatedDb)
   }
 }
 

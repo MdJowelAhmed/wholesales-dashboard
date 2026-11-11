@@ -35,18 +35,18 @@ export function PnlReportTab({ pnl, onExportCsv }: PnlReportTabProps): React.JSX
       <CardContent className="p-6 space-y-4">
         <div className="rounded-lg border border-border divide-y divide-border text-sm">
           <div className="p-3 bg-muted/20 flex justify-between font-bold text-foreground">
-            <span>Gross Commercial Revenue (Sales & Wholesale Dispatches):</span>
+            <span>Gross Commercial Revenue (Sales):</span>
             <span>{formatBDT(pnl.grossRevenue)}</span>
           </div>
           <div className="p-3 flex justify-between text-muted-foreground">
-            <span>Cost of Goods Sold (Fabric, Yarn, Trims Consumed @ ~45%):</span>
+            <span>Cost of Raw Materials Consumed (Fabric, Yarn, Trims):</span>
             <span className="text-rose-600 dark:text-rose-400">
-              - {formatBDT(pnl.estimatedMaterialCost)}
+              - {formatBDT(pnl.actualMaterialCost)}
             </span>
           </div>
           <div className="p-3 bg-muted/10 flex justify-between font-semibold text-foreground">
             <span>Gross Manufacturing Margin:</span>
-            <span>{formatBDT(pnl.grossRevenue - pnl.estimatedMaterialCost)}</span>
+            <span>{formatBDT(pnl.grossRevenue - pnl.actualMaterialCost)}</span>
           </div>
           <div className="p-3 flex justify-between text-muted-foreground">
             <span>Worker Payroll & Tailor Piece-Rate Wages:</span>

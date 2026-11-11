@@ -1,6 +1,8 @@
 import { Employee, EmployeeAdvance, EmployeeLedgerEntry } from '@/types/employees'
 import { roundCurrency } from '@/lib/calculations/financialCalculations'
+import { generateId } from '@/lib/ids'
 import { mockStorage } from '../storage/localStorageAdapter'
+import { ledgerEngine } from './ledgerEngine'
 
 export class EmployeesRepository {
   public async listEmployees(): Promise<Employee[]> {
@@ -15,6 +17,29 @@ export class EmployeesRepository {
 
   public async getEmployeeLedger(employeeId: string): Promise<EmployeeLedgerEntry[]> {
     const db = mockStorage.getDatabase()
+    const entries = ledgerEngine.getPartyLedger(db, 'employee', employeeId)
+    if (entries.length > 0) {
+      return entries.map((e) => {
+        let type: EmployeeLedgerEntry['type'] = 'advance_recovery'
+        if (e.type === 'work' || e.type === 'salary') {
+          type = e.debit > 0 ? 'payment_issued' : 'wage_earned'
+        } else if (e.type === 'advance') {
+          type = 'advance_given'
+        } else if (e.type === 'payment') {
+          type = 'payment_issued'
+        }
+
+        return {
+          id: e.id,
+          date: e.date,
+          type,
+          description: e.note || `${e.type.toUpperCase()}: ${e.refId}`,
+          debit: e.debit,
+          credit: e.credit,
+          balance: e.balanceAfter ?? e.balance ?? 0,
+        }
+      })
+    }
     return db.employeeLedger[employeeId] || []
   }
 
@@ -28,8 +53,9 @@ export class EmployeesRepository {
     const employee = db.employees.find((e) => e.id === input.employeeId)
     if (!employee) throw new Error(`Employee not found: ${input.employeeId}`)
 
+    const advanceId = generateId('eadv')
     const advance: EmployeeAdvance = {
-      id: `eadv-${Date.now()}`,
+      id: advanceId,
       date: input.date,
       amount: roundCurrency(input.amount),
       repaidAmount: 0,
@@ -39,26 +65,20 @@ export class EmployeesRepository {
     employee.totalAdvancesOutstanding = roundCurrency(
       employee.totalAdvancesOutstanding + input.amount
     )
-    employee.currentPayableBalance = roundCurrency(
-      employee.currentPayableBalance - input.amount
-    )
 
-    const ledger = db.employeeLedger[employee.id] || []
-    const previousBalance = ledger.length > 0 ? ledger[ledger.length - 1].balance : 0
-    const newBalance = roundCurrency(previousBalance - input.amount)
-
-    ledger.push({
-      id: `eledg-${Date.now()}`,
+    const { db: updatedDb } = ledgerEngine.appendLedgerEntry(db, {
+      partyType: 'employee',
+      partyId: employee.id,
       date: input.date,
-      type: 'advance_given',
-      description: `Advance given: ${input.notes || 'Cash Advance'}`,
+      type: 'advance',
+      refType: 'advance',
+      refId: advanceId,
       debit: input.amount,
       credit: 0,
-      balance: newBalance,
+      note: `Advance given: ${input.notes || 'Cash Advance'}`,
     })
-    db.employeeLedger[employee.id] = ledger
 
-    mockStorage.saveDatabase(db)
+    mockStorage.saveDatabase(updatedDb)
     return advance
   }
 
@@ -73,35 +93,55 @@ export class EmployeesRepository {
     if (!employee) throw new Error(`Employee not found: ${input.employeeId}`)
 
     employee.totalPaymentsMade = roundCurrency(employee.totalPaymentsMade + input.amount)
-    employee.currentPayableBalance = roundCurrency(
-      Math.max(0, employee.currentPayableBalance - input.amount)
-    )
 
-    const ledger = db.employeeLedger[employee.id] || []
-    const previousBalance = ledger.length > 0 ? ledger[ledger.length - 1].balance : 0
-    const newBalance = roundCurrency(Math.max(0, previousBalance - input.amount))
-
-    ledger.push({
-      id: `eledg-${Date.now()}`,
+    const { db: updatedDb } = ledgerEngine.appendLedgerEntry(db, {
+      partyType: 'employee',
+      partyId: employee.id,
       date: input.date,
-      type: 'payment_issued',
-      description: `Salary/Wage payment issued: ${input.notes || 'Settlement'}`,
+      type: 'payment',
+      refType: 'payment',
+      refId: generateId('epay'),
       debit: input.amount,
       credit: 0,
-      balance: newBalance,
+      note: `Salary/Wage payment issued: ${input.notes || 'Settlement'}`,
     })
-    db.employeeLedger[employee.id] = ledger
+
+    mockStorage.saveDatabase(updatedDb)
+  }
+
+  public async recoverAdvance(input: {
+    employeeId: string
+    amount: number
+    date?: string
+    notes?: string
+  }): Promise<void> {
+    const db = mockStorage.getDatabase()
+    const employee = db.employees.find((e) => e.id === input.employeeId)
+    if (!employee) throw new Error(`Employee not found: ${input.employeeId}`)
+
+    const recovered = Math.min(employee.totalAdvancesOutstanding, input.amount)
+    employee.totalAdvancesOutstanding = roundCurrency(
+      Math.max(0, employee.totalAdvancesOutstanding - recovered)
+    )
 
     mockStorage.saveDatabase(db)
   }
 
   public async createEmployee(
-    input: Omit<Employee, 'id' | 'createdAt' | 'totalEarnedWages' | 'totalAdvancesOutstanding' | 'totalPaymentsMade' | 'currentPayableBalance'>
+    input: Omit<
+      Employee,
+      | 'id'
+      | 'createdAt'
+      | 'totalEarnedWages'
+      | 'totalAdvancesOutstanding'
+      | 'totalPaymentsMade'
+      | 'currentPayableBalance'
+    >
   ): Promise<Employee> {
     const db = mockStorage.getDatabase()
     const newEmployee: Employee = {
       ...input,
-      id: `emp-${Date.now()}`,
+      id: generateId('emp'),
       totalEarnedWages: 0,
       totalAdvancesOutstanding: 0,
       totalPaymentsMade: 0,

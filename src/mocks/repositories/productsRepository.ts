@@ -2,6 +2,7 @@ import {
   Product,
   ProductVariant,
 } from '@/types/products'
+import { generateId } from '@/lib/ids'
 import { mockStorage } from '../storage/localStorageAdapter'
 import { variantsRepository } from './variantsRepository'
 
@@ -48,10 +49,10 @@ export class ProductsRepository {
     const db = mockStorage.getDatabase()
     const newProduct: Product = {
       ...product,
-      id: `prod-${Date.now()}`,
+      id: generateId('prod'),
       createdAt: new Date().toISOString(),
     }
-    db.products.unshift(newProduct)
+    db.products = [newProduct, ...db.products]
     mockStorage.saveDatabase(db)
     return newProduct
   }
@@ -70,7 +71,9 @@ export class ProductsRepository {
       ...updates,
       updatedAt: new Date().toISOString(),
     }
-    db.products[index] = updated
+    const nextProducts = [...db.products]
+    nextProducts[index] = updated
+    db.products = nextProducts
     mockStorage.saveDatabase(db)
     return updated
   }
@@ -94,9 +97,9 @@ export class ProductsRepository {
 
     const newVariant: ProductVariant = {
       ...variant,
-      id: `var-${Date.now()}`,
+      id: generateId('var'),
     }
-    product.variants.push(newVariant)
+    product.variants = [...product.variants, newVariant]
     mockStorage.saveDatabase(db)
     return product
   }

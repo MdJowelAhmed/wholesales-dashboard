@@ -1,29 +1,45 @@
 /**
  * Central financial and production calculation rules for Garments SaaS.
- * All finished garment pricing is per piece.
- * Quantities are normalized in integer pieces.
- * Amounts are rounded to 2 decimal places to avoid floating-point issues.
  */
-
 export interface LineItemCalculation {
   quantityPieces: number
   pricePerPiece: number
   discount?: number
 }
 
-export type WageRateType = 'piece' | 'dozen' | 'monthly_fixed' | 'monthly_plus_incentive'
+export type WageRateType = 'piece' | 'dozen' | 'monthly_fixed'
 
-/**
- * Rounds a number strictly to two decimal places
- */
 export function roundCurrency(amount: number): number {
   return Math.round((amount + Number.EPSILON) * 100) / 100
 }
 
 /**
- * Calculates line total for garment sales or deliveries.
- * Line total = (quantity in pieces * per-piece price) - discount
+ * Normalizes input quantities in piece, dozen, or bundle into integer pieces.
  */
+export function toPieces(
+  qty: number,
+  unit: 'piece' | 'dozen' | 'bundle',
+  piecesPerBundle: number = 6
+): number {
+  if (qty < 0) throw new Error('Quantity must be non-negative')
+  switch (unit) {
+    case 'piece': return Math.round(qty)
+    case 'dozen': return Math.round(qty * 12)
+    case 'bundle': return Math.round(qty * (piecesPerBundle || 6))
+    default: return Math.round(qty)
+  }
+}
+
+export function calculatePieceWage(goodPieces: number, ratePerPiece: number): number {
+  if (goodPieces < 0 || ratePerPiece < 0) throw new Error('Good pieces and rate must be non-negative')
+  return roundCurrency(goodPieces * ratePerPiece)
+}
+
+export function calculateDozenWage(goodPieces: number, ratePerDozen: number): number {
+  if (goodPieces < 0 || ratePerDozen < 0) throw new Error('Good pieces and rate must be non-negative')
+  return roundCurrency((goodPieces / 12) * ratePerDozen)
+}
+
 export function calculateLineTotal(
   quantityPieces: number,
   pricePerPiece: number,
@@ -32,54 +48,34 @@ export function calculateLineTotal(
   if (quantityPieces < 0 || pricePerPiece < 0 || discount < 0) {
     throw new Error('Quantity, price per piece, and discount must be non-negative')
   }
-  const gross = quantityPieces * pricePerPiece
-  const net = Math.max(0, gross - discount)
-  return roundCurrency(net)
+  return roundCurrency(Math.max(0, quantityPieces * pricePerPiece - discount))
 }
 
-/**
- * Calculates invoice grand total
- */
 export function calculateInvoiceTotal(
   items: LineItemCalculation[],
   orderDiscount: number = 0,
   tax: number = 0
-): {
-  subtotal: number
-  discount: number
-  tax: number
-  total: number
-} {
+): { subtotal: number; discount: number; tax: number; total: number } {
   const subtotal = roundCurrency(
     items.reduce((sum, item) => sum + calculateLineTotal(item.quantityPieces, item.pricePerPiece, item.discount || 0), 0)
   )
   const totalAfterDiscount = Math.max(0, subtotal - orderDiscount)
-  const total = roundCurrency(totalAfterDiscount + tax)
-
   return {
     subtotal,
     discount: roundCurrency(orderDiscount),
     tax: roundCurrency(tax),
-    total,
+    total: roundCurrency(totalAfterDiscount + tax),
   }
 }
 
-/**
- * Calculates outstanding balance
- * Outstanding = total invoiced - total paid - total return credits
- */
 export function calculateOutstandingBalance(
   totalInvoiced: number,
   totalPaid: number,
   returnCredit: number = 0
 ): number {
-  const balance = totalInvoiced - totalPaid - returnCredit
-  return roundCurrency(balance)
+  return roundCurrency(totalInvoiced - totalPaid - returnCredit)
 }
 
-/**
- * Calculates return credit for returned pieces
- */
 export function calculateReturnCredit(
   returnedPieces: number,
   originalPricePerPiece: number
@@ -99,34 +95,27 @@ export function calculateEmployeeWage({
   baseRate,
   completedPieces = 0,
   completedDozens = 0,
-  incentiveAmount = 0,
   monthlySalary = 0,
 }: {
   rateType: WageRateType
   baseRate?: number
   completedPieces?: number
   completedDozens?: number
-  incentiveAmount?: number
   monthlySalary?: number
 }): number {
   const rate = baseRate || 0
 
   switch (rateType) {
     case 'piece':
-      return roundCurrency(completedPieces * rate + incentiveAmount)
+      return calculatePieceWage(completedPieces, rate)
 
     case 'dozen': {
-      // If pieces are provided, normalize: each piece is rate / 12
       const piecesEquivalent = completedPieces + completedDozens * 12
-      const dozenWages = (piecesEquivalent / 12) * rate
-      return roundCurrency(dozenWages + incentiveAmount)
+      return calculateDozenWage(piecesEquivalent, rate)
     }
 
     case 'monthly_fixed':
       return roundCurrency(monthlySalary)
-
-    case 'monthly_plus_incentive':
-      return roundCurrency(monthlySalary + incentiveAmount)
 
     default:
       return 0
@@ -205,15 +194,14 @@ export function calculateNetPayrollPayable({
 
 export interface PnLInput {
   salesRevenue: number
-  dispatchedValue: number
+  actualMaterialCost: number
   expenses: number
   wages: number
-  materialCostPercentage?: number
 }
 
 export interface PnLMetrics {
   grossRevenue: number
-  estimatedMaterialCost: number
+  actualMaterialCost: number
   totalWages: number
   totalExpenses: number
   operatingExpenses: number
@@ -222,21 +210,21 @@ export interface PnLMetrics {
 }
 
 /**
- * Calculates Profit & Loss (P&L) metrics based on revenues, COGS, wages, and operating expenses.
+ * Calculates Profit & Loss (P&L) metrics based on revenues, COGS (actual consumed material cost),
+ * wages, and operating expenses. Unsold consignment goods are NOT counted as revenue.
  */
 export function calculatePnLMetrics(input: PnLInput): PnLMetrics {
-  const grossRevenue = roundCurrency(input.salesRevenue + input.dispatchedValue)
-  const materialCostRate = input.materialCostPercentage ?? 0.45
-  const estimatedMaterialCost = roundCurrency(grossRevenue * materialCostRate)
+  const grossRevenue = roundCurrency(input.salesRevenue)
+  const actualMaterialCost = roundCurrency(input.actualMaterialCost)
   const totalWages = roundCurrency(input.wages)
   const totalExpenses = roundCurrency(input.expenses)
   const operatingExpenses = roundCurrency(totalExpenses + totalWages)
-  const netOperatingProfit = roundCurrency(grossRevenue - estimatedMaterialCost - operatingExpenses)
+  const netOperatingProfit = roundCurrency(grossRevenue - actualMaterialCost - operatingExpenses)
   const profitMargin = grossRevenue > 0 ? roundCurrency((netOperatingProfit / grossRevenue) * 100) : 0
 
   return {
     grossRevenue,
-    estimatedMaterialCost,
+    actualMaterialCost,
     totalWages,
     totalExpenses,
     operatingExpenses,

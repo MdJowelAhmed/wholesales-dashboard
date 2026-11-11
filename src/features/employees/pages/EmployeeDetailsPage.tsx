@@ -75,8 +75,6 @@ export function EmployeeDetailsPage(): React.JSX.Element {
         return `Per-Dozen Rate: ৳${employee.ratePerDozen}/dozen (৳${((employee.ratePerDozen || 0) / 12).toFixed(2)}/pc)`
       case 'monthly_fixed':
         return `Fixed Monthly Salary: ${formatBDT(employee.monthlySalary || 0)}`
-      case 'monthly_plus_incentive':
-        return `Monthly Salary: ${formatBDT(employee.monthlySalary || 0)} + Output Incentive`
       default:
         return employee.compensationMethod
     }

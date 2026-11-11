@@ -28,6 +28,7 @@ import {
   initialPayroll,
   initialSales,
 } from './data/customersAndFinance.data'
+import { LedgerEntry } from '@/types/ledger'
 
 export interface SeedDatabase {
   version: string
@@ -58,10 +59,11 @@ export interface SeedDatabase {
   payments: typeof initialPayments
   expenses: typeof initialExpenses
   payroll: typeof initialPayroll
+  ledgerEntries?: LedgerEntry[]
 }
 
 export function getFreshSeedData(): SeedDatabase {
-  return JSON.parse(
+  const data: SeedDatabase = JSON.parse(
     JSON.stringify({
       version: '1.0.0',
       categories: [...DEFAULT_PRODUCT_CATEGORIES],
@@ -93,4 +95,16 @@ export function getFreshSeedData(): SeedDatabase {
       payroll: initialPayroll,
     })
   )
+
+  // Ensure current day & current month sales exist for real-time dashboard responsiveness
+  const today = new Date().toISOString().split('T')[0]
+  if (data.sales && data.sales.length > 0) {
+    data.sales[0].date = today
+  }
+  const skDeliveries = Object.values(data.shopkeeperDeliveries || {}).flat()
+  if (skDeliveries.length > 0) {
+    skDeliveries[0].date = today
+  }
+
+  return data
 }

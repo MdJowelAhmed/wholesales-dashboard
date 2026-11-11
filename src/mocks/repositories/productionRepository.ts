@@ -1,9 +1,13 @@
 import { ProductionEntry, ProductionOrder } from '@/types/production'
 import {
   calculateEmployeeWage,
+  calculateRawMaterialConsumption,
   roundCurrency,
 } from '@/lib/calculations/financialCalculations'
+import { generateId } from '@/lib/ids'
 import { mockStorage } from '../storage/localStorageAdapter'
+import { ledgerEngine } from './ledgerEngine'
+import { stockEngine } from './stockEngine'
 
 export class ProductionRepository {
   public async listOrders(): Promise<ProductionOrder[]> {
@@ -33,19 +37,18 @@ export class ProductionRepository {
     damagedQuantityPieces: number
     notes?: string
   }): Promise<ProductionEntry> {
-    const db = mockStorage.getDatabase()
+    let db = mockStorage.getDatabase()
 
-    // Normalize to pieces: 1 dozen = 12 pieces
     const totalPieces =
       input.inputUnit === 'dozen' ? input.inputQuantity * 12 : input.inputQuantity
 
-    // Calculate earned wage for the operator
+    // One single rule: Wage is paid on GOOD pieces only
     const calculatedWage =
       input.inputUnit === 'dozen'
         ? calculateEmployeeWage({
             rateType: 'dozen',
             baseRate: input.applicableWageRate,
-            completedPieces: totalPieces,
+            completedPieces: input.goodQuantityPieces,
           })
         : calculateEmployeeWage({
             rateType: 'piece',
@@ -53,8 +56,9 @@ export class ProductionRepository {
             completedPieces: input.goodQuantityPieces,
           })
 
+    const entryId = generateId('prd-ent')
     const entry: ProductionEntry = {
-      id: `prd-ent-${Date.now()}`,
+      id: entryId,
       productionDate: input.productionDate,
       orderCode: input.orderCode,
       productId: input.productId,
@@ -76,53 +80,65 @@ export class ProductionRepository {
       createdAt: new Date().toISOString(),
     }
 
-    db.productionEntries.unshift(entry)
+    db.productionEntries = [entry, ...db.productionEntries]
 
-    // Update finished goods inventory if approved
-    const stockItem = db.finishedGoodsStock.find((s) => s.variantId === input.variantId)
-    if (stockItem) {
-      stockItem.currentPieces += input.goodQuantityPieces
-      stockItem.valuation = roundCurrency(stockItem.currentPieces * stockItem.pricePerPiece)
-    }
-
-    // Update employee wage ledger
-    const employee = db.employees.find((e) => e.id === input.employeeId)
-    if (employee) {
-      employee.totalEarnedWages = roundCurrency(employee.totalEarnedWages + calculatedWage)
-      employee.currentPayableBalance = roundCurrency(
-        employee.currentPayableBalance + calculatedWage
+    // 1. Consume raw material (e.g. 0.25 kg fabric per garment)
+    if (db.materials && db.materials.length > 0) {
+      const material = db.materials[0]
+      const consumedQty = calculateRawMaterialConsumption(
+        input.goodQuantityPieces + input.damagedQuantityPieces,
+        0.25
       )
-
-      const ledger = db.employeeLedger[employee.id] || []
-      const prevBal = ledger.length > 0 ? ledger[ledger.length - 1].balance : 0
-      ledger.push({
-        id: `eledg-${Date.now()}`,
-        date: input.productionDate,
-        type: 'wage_earned',
-        description: `Production Wage: ${input.goodQuantityPieces} pcs (${input.productName} Size ${input.size})`,
-        debit: 0,
-        credit: calculatedWage,
-        balance: roundCurrency(prevBal + calculatedWage),
-      })
-      db.employeeLedger[employee.id] = ledger
+      if (consumedQty > 0) {
+        const res = stockEngine.recordMovement(db, {
+          itemType: 'raw_material',
+          itemId: material.id,
+          movementType: 'material_issue',
+          quantityPieces: consumedQty,
+          referenceId: entry.id,
+          referenceType: 'production',
+          date: input.productionDate,
+          notes: `Material issue for ${input.goodQuantityPieces} pcs (${input.productName})`,
+        })
+        db = res.db
+      }
     }
 
-    // Log stock movement into inventory
+    // 2. Add finished goods stock via stockEngine
     if (input.goodQuantityPieces > 0) {
-      db.inventoryMovements.unshift({
-        id: `inv-mov-${Date.now()}`,
-        date: input.productionDate,
+      const stockItem = db.finishedGoodsStock?.find((s) => s.variantId === input.variantId)
+      const res = stockEngine.recordMovement(db, {
         itemType: 'finished_goods',
         itemId: input.variantId,
-        itemName: `${input.productName} (Size ${input.size})`,
         movementType: 'production_receipt',
-        quantityChange: input.goodQuantityPieces,
-        unit: 'pieces',
-        referenceType: 'production',
+        quantityPieces: input.goodQuantityPieces,
+        unitPrice: stockItem?.pricePerPiece,
         referenceId: entry.id,
+        referenceType: 'production',
+        date: input.productionDate,
         notes: `Production output from ${input.employeeName} (${input.goodQuantityPieces} pcs)`,
-        createdAt: new Date().toISOString(),
       })
+      db = res.db
+    }
+
+    // 3. Record wage earned in employee ledger via ledgerEngine
+    if (calculatedWage > 0) {
+      const employee = db.employees.find((e) => e.id === input.employeeId)
+      if (employee) {
+        employee.totalEarnedWages = roundCurrency(employee.totalEarnedWages + calculatedWage)
+        const res = ledgerEngine.appendLedgerEntry(db, {
+          partyType: 'employee',
+          partyId: employee.id,
+          date: input.productionDate,
+          type: 'work',
+          refType: 'production_entry',
+          refId: entry.id,
+          debit: 0,
+          credit: calculatedWage,
+          note: `Production Wage: ${input.goodQuantityPieces} pcs (${input.productName} Size ${input.size})`,
+        })
+        db = res.db
+      }
     }
 
     mockStorage.saveDatabase(db)
@@ -137,9 +153,9 @@ export class ProductionRepository {
     dueDate: string
   }): Promise<ProductionOrder> {
     const db = mockStorage.getDatabase()
-    const code = `PO-2026-${Date.now().toString().slice(-4)}`
+    const code = `PO-2026-${generateId().slice(0, 4).toUpperCase()}`
     const order: ProductionOrder = {
-      id: `prd-ord-${Date.now()}`,
+      id: generateId('prd-ord'),
       orderCode: code,
       productId: input.productId,
       productName: input.productName,
@@ -150,7 +166,7 @@ export class ProductionRepository {
       status: 'in_progress',
       createdAt: new Date().toISOString(),
     }
-    db.productionOrders.unshift(order)
+    db.productionOrders = [order, ...db.productionOrders]
     mockStorage.saveDatabase(db)
     return order
   }
@@ -167,36 +183,27 @@ export class ProductionRepository {
   }
 
   public async approveEntry(entryId: string): Promise<ProductionEntry> {
-    const db = mockStorage.getDatabase()
+    let db = mockStorage.getDatabase()
     const entry = db.productionEntries.find((e) => e.id === entryId)
     if (!entry) throw new Error(`Production entry not found: ${entryId}`)
 
     if (entry.status !== 'approved') {
       entry.status = 'approved'
 
-      // Update finished goods inventory stock
-      const stockItem = db.finishedGoodsStock.find((s) => s.variantId === entry.variantId)
-      if (stockItem) {
-        stockItem.currentPieces += entry.goodQuantityPieces
-        stockItem.valuation = roundCurrency(stockItem.currentPieces * stockItem.pricePerPiece)
-      }
-
-      // Record movement
-      db.inventoryMovements.unshift({
-        id: `inv-mov-${Date.now()}`,
-        date: new Date().toISOString().split('T')[0],
+      // Update finished goods inventory stock via stockEngine
+      const stockItem = db.finishedGoodsStock?.find((s) => s.variantId === entry.variantId)
+      const res = stockEngine.recordMovement(db, {
         itemType: 'finished_goods',
         itemId: entry.variantId,
-        itemName: `${entry.productName} (Size ${entry.size})`,
         movementType: 'production_receipt',
-        quantityChange: entry.goodQuantityPieces,
-        unit: 'pieces',
-        referenceType: 'production',
+        quantityPieces: entry.goodQuantityPieces,
+        unitPrice: stockItem?.pricePerPiece,
         referenceId: entry.id,
+        referenceType: 'production',
+        date: new Date().toISOString().split('T')[0],
         notes: `QC approval: ${entry.goodQuantityPieces} pcs passed`,
-        createdAt: new Date().toISOString(),
       })
-
+      db = res.db
       mockStorage.saveDatabase(db)
     }
 

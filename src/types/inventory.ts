@@ -2,13 +2,28 @@ import { BaseEntity } from './common'
 
 export type StockMovementType =
   | 'purchase'
+  | 'purchase_return'
   | 'material_issue'
-  | 'material_return'
   | 'production_receipt'
   | 'sale'
   | 'sales_return'
+  | 'consignment_out'
+  | 'consignment_return'
+  | 'transfer_to_own_shop'
   | 'damage'
   | 'adjustment'
+
+export interface RecordMovementInput {
+  date: string
+  itemType: 'finished_goods' | 'raw_material'
+  itemId: string // variantId for finished_goods, materialId for raw_material
+  movementType: StockMovementType
+  quantityPieces: number // positive integer quantity to move
+  unitPrice?: number
+  referenceType?: string
+  referenceId?: string
+  notes?: string
+}
 
 export interface FinishedGoodsStockItem {
   id?: string
