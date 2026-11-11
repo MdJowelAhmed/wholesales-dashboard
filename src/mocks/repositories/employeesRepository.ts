@@ -1,4 +1,5 @@
-import { Employee, EmployeeAdvance, EmployeeLedgerEntry } from '@/types/employees'
+import { Employee, EmployeeAdvance, EmployeeLedgerEntry, EmployeePaymentItem } from '@/types/employees'
+import { ProductionEntry } from '@/types/production'
 import { roundCurrency } from '@/lib/calculations/financialCalculations'
 import { generateId } from '@/lib/ids'
 import { mockStorage } from '../storage/localStorageAdapter'
@@ -13,6 +14,31 @@ export class EmployeesRepository {
   public async getEmployeeById(id: string): Promise<Employee | null> {
     const db = mockStorage.getDatabase()
     return db.employees.find((e) => e.id === id) || null
+  }
+
+  public async getEmployeeWorkHistory(employeeId: string): Promise<ProductionEntry[]> {
+    const db = mockStorage.getDatabase()
+    const entries = (db.productionEntries || []).filter((e) => e.employeeId === employeeId)
+    return [...entries].sort(
+      (a, b) => new Date(b.productionDate).getTime() - new Date(a.productionDate).getTime()
+    )
+  }
+
+  public async getEmployeePaymentHistory(employeeId: string): Promise<EmployeePaymentItem[]> {
+    const ledger = await this.getEmployeeLedger(employeeId)
+    const paymentEntries = ledger.filter(
+      (e) => e.type === 'payment_issued' || e.type === 'advance_given' || e.debit > 0
+    )
+
+    return paymentEntries.map((e) => ({
+      id: e.id,
+      date: e.date,
+      type: e.type === 'advance_given' ? 'cash_advance' : 'salary_payment',
+      reference: e.description.split(':')[0] || 'VOUCHER',
+      amount: e.debit,
+      notes: e.description,
+      runningBalance: e.balance,
+    }))
   }
 
   public async getEmployeeLedger(employeeId: string): Promise<EmployeeLedgerEntry[]> {

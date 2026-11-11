@@ -19,6 +19,17 @@ export interface EmployeeAdvance {
   notes?: string
 }
 
+export interface EmployeePaymentItem {
+  id: string
+  date: string
+  type: 'salary_payment' | 'cash_advance'
+  reference: string
+  amount: number
+  paymentMethod?: string
+  notes?: string
+  runningBalance: number
+}
+
 export interface Employee extends BaseEntity {
   name: string
   employeeCode: string
