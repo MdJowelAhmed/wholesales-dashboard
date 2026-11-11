@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { renderWithProviders } from '@/test/helpers/test-utils'
 import { AddProductDialog } from './AddProductDialog'
 import { productsRepository } from '@/mocks/repositories/productsRepository'
+import { variantsRepository } from '@/mocks/repositories/variantsRepository'
 import { mockStorage } from '@/mocks/storage/localStorageAdapter'
 
 describe('AddProductDialog', () => {
@@ -12,7 +13,7 @@ describe('AddProductDialog', () => {
     vi.clearAllMocks()
   })
 
-  it('renders image upload, fabric input, and initial size formats (16-20, 22-26, 28-32, 34-38)', () => {
+  it('renders image upload, fabric input, and initial size formats (16-20, 22-26, 28-32, 34-38)', async () => {
     renderWithProviders(
       <AddProductDialog open={true} onOpenChange={vi.fn()} onSuccess={vi.fn()} />
     )
@@ -24,10 +25,12 @@ describe('AddProductDialog', () => {
     expect(screen.getByLabelText(/Fabric \/ Material/i)).toBeInTheDocument()
 
     // Default wholesale pack variants
-    expect(screen.getByDisplayValue('16-20')).toBeInTheDocument()
-    expect(screen.getByDisplayValue('22-26')).toBeInTheDocument()
-    expect(screen.getByDisplayValue('28-32')).toBeInTheDocument()
-    expect(screen.getByDisplayValue('34-38')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('16-20')).toBeInTheDocument()
+      expect(screen.getByDisplayValue('22-26')).toBeInTheDocument()
+      expect(screen.getByDisplayValue('28-32')).toBeInTheDocument()
+      expect(screen.getByDisplayValue('34-38')).toBeInTheDocument()
+    })
   })
 
   it('successfully creates product with multiple size variants and custom image URL', async () => {
@@ -85,47 +88,42 @@ describe('AddProductDialog', () => {
     })
   })
 
-  it('allows user to dynamically add a new custom category on the fly', async () => {
-    const user = userEvent.setup()
+  it('dynamically loads categories from variants repository into dropdown', async () => {
+    // Add a custom category to the repository
+    await variantsRepository.createCategory('Export Denim', 'Denim apparel')
+
     renderWithProviders(
       <AddProductDialog open={true} onOpenChange={vi.fn()} onSuccess={vi.fn()} />
     )
 
-    const newCatBtn = screen.getByRole('button', { name: /New Category/i })
-    await user.click(newCatBtn)
-
-    const catInput = screen.getByPlaceholderText(/Export T-Shirts, Denim Jeans/i)
-    await user.type(catInput, 'Premium Panjabi')
-
-    const addBtn = screen.getByRole('button', { name: /^Add$/i })
-    await user.click(addBtn)
-
     await waitFor(() => {
-      expect(screen.getByDisplayValue('Premium Panjabi')).toBeInTheDocument()
+      const categorySelect = screen.getByLabelText(/Product Category \*/i) as HTMLSelectElement
+      expect(categorySelect).toBeInTheDocument()
+      const optionValues = Array.from(categorySelect.options).map((o) => o.value)
+      expect(optionValues).toContain('Export Denim')
     })
   })
 
-  it('allows user to dynamically create a new size format', async () => {
+  it('dynamically loads sizes from variants repository and allows adding a new size variant row', async () => {
     const user = userEvent.setup()
+    // Add a custom size to the repository
+    await variantsRepository.createSize('36-40', 'Adult large format')
+
     renderWithProviders(
       <AddProductDialog open={true} onOpenChange={vi.fn()} onSuccess={vi.fn()} />
     )
 
-    const newSizeBtn = screen.getByRole('button', { name: /New Size/i })
-    await user.click(newSizeBtn)
+    await waitFor(() => {
+      expect(screen.getByText('Add Size Variant')).toBeInTheDocument()
+    })
 
-    const sizeInput = screen.getByPlaceholderText(/36-40, XXL/i)
-    await user.type(sizeInput, '36-40')
-
-    // Find the check button inside the new size row
-    const checkBtn = sizeInput.parentElement?.querySelector('button')
-    if (checkBtn) {
-      await user.click(checkBtn)
-    }
+    const addVariantBtn = screen.getByRole('button', { name: /Add Size Variant/i })
+    await user.click(addVariantBtn)
 
     await waitFor(() => {
-      expect(screen.getByDisplayValue('36-40')).toBeInTheDocument()
+      const options = screen.getAllByRole('option')
+      const optionValues = options.map((o) => (o as HTMLOptionElement).value)
+      expect(optionValues).toContain('36-40')
     })
   })
 })
-

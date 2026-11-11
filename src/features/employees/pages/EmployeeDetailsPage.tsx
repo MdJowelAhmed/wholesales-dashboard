@@ -8,7 +8,6 @@ import {
   MapPin,
   Calendar,
   Award,
-  Scissors,
   TrendingUp,
 } from 'lucide-react'
 import { PageHeader } from '@/components/shared/PageHeader/PageHeader'
@@ -90,52 +89,30 @@ export function EmployeeDetailsPage(): React.JSX.Element {
   }
 
   const formatCompensationDetails = () => {
-    switch (employee.compensationMethod) {
-      case 'piece':
-        return `Per-Piece Rate: ৳${employee.ratePerPiece}/piece`
-      case 'dozen':
-        return `Per-Dozen Rate: ৳${employee.ratePerDozen}/dozen (৳${((employee.ratePerDozen || 0) / 12).toFixed(2)}/pc)`
-      case 'monthly_fixed':
-        return `Fixed Monthly Salary: ${formatBDT(employee.monthlySalary || 0)}`
-      default:
-        return employee.compensationMethod
+    if (employee.compensationMethod === 'piece') return `Per-Piece Rate: ৳${employee.ratePerPiece}/piece`
+    if (employee.compensationMethod === 'dozen') {
+      return `Per-Dozen Rate: ৳${employee.ratePerDozen}/dozen (৳${((employee.ratePerDozen || 0) / 12).toFixed(2)}/pc)`
     }
+    if (employee.compensationMethod === 'monthly_fixed') {
+      return `Fixed Monthly Salary: ${formatBDT(employee.monthlySalary || 0)}`
+    }
+    return employee.compensationMethod
   }
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-2">
-        <Button variant="ghost" asChild size="sm" className="h-8 px-2">
-          <Link to="/employees" className="text-xs">
-            <ArrowLeft className="h-3.5 w-3.5 mr-1" /> Back to Employees
-          </Link>
-        </Button>
-      </div>
+      <Button variant="ghost" asChild size="sm" className="h-8 px-2">
+        <Link to="/employees" className="text-xs flex items-center gap-1">
+          <ArrowLeft className="h-3.5 w-3.5" /> Back to Employees
+        </Link>
+      </Button>
 
       <PageHeader
         title={`${employee.name} (${employee.employeeCode})`}
         description={`${employee.designation} • Joined ${employee.joiningDate}`}
         actions={
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-2">
             <PrintButton label="Print Wage Statement" />
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setLogWorkOpen(true)}
-              className="text-primary border-primary/30 hover:bg-primary/10"
-            >
-              <Scissors className="h-4 w-4 mr-1.5" /> Log Daily Work
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setAdvanceOpen(true)}
-            >
-              <DollarSign className="h-4 w-4 mr-1.5" /> Issue Advance
-            </Button>
-            <Button size="sm" onClick={() => setPaymentOpen(true)}>
-              <Banknote className="h-4 w-4 mr-1.5" /> Disburse Payment
-            </Button>
           </div>
         }
       />

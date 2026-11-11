@@ -1,5 +1,5 @@
 import React from 'react'
-import { DollarSign, Banknote, Calendar, CreditCard, ArrowDownRight } from 'lucide-react'
+import { DollarSign, Banknote, CreditCard } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { EmployeePaymentItem } from '@/types/employees'
@@ -8,7 +8,7 @@ import { formatBDT } from '@/lib/calculations/financialCalculations'
 interface WorkerPaymentHistoryTabProps {
   payments: EmployeePaymentItem[]
   totalPaymentsMade: number
-  totalAdvancesOutstanding: number
+  totalAdvancesOutstanding?: number
   totalEarnedWages: number
   currentPayableBalance: number
   onIssueAdvance: () => void
@@ -18,7 +18,7 @@ interface WorkerPaymentHistoryTabProps {
 export function WorkerPaymentHistoryTab({
   payments,
   totalPaymentsMade,
-  totalAdvancesOutstanding,
+  totalAdvancesOutstanding: _totalAdvancesOutstanding,
   totalEarnedWages,
   currentPayableBalance,
   onIssueAdvance,
@@ -69,48 +69,6 @@ export function WorkerPaymentHistoryTab({
           </div>
         </CardContent>
       </Card>
-
-      {/* Summary Metrics Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <div className="bg-destructive/5 border border-destructive/20 rounded-lg p-3">
-          <div className="text-xs text-muted-foreground flex items-center gap-1">
-            <ArrowDownRight className="h-3.5 w-3.5 text-destructive" />
-            Total Paid Out / মোট পরিশোধিত টাকা
-          </div>
-          <div className="text-xl font-bold font-mono text-destructive mt-0.5">
-            {formatBDT(totalPaymentsMade)}
-          </div>
-          <div className="text-[11px] text-muted-foreground mt-0.5">
-            All settled cash/bank salary & wage payments
-          </div>
-        </div>
-
-        <div className="bg-status-pending/5 border border-status-pending/20 rounded-lg p-3">
-          <div className="text-xs text-muted-foreground flex items-center gap-1">
-            <DollarSign className="h-3.5 w-3.5 text-status-pending" />
-            Outstanding Advances / বকেয়া অগ্রিম
-          </div>
-          <div className="text-xl font-bold font-mono text-status-pending-foreground dark:text-status-pending mt-0.5">
-            {formatBDT(totalAdvancesOutstanding)}
-          </div>
-          <div className="text-[11px] text-muted-foreground mt-0.5">
-            Emergency cash advances pending recovery
-          </div>
-        </div>
-
-        <div className="bg-muted/40 border border-border rounded-lg p-3">
-          <div className="text-xs text-muted-foreground flex items-center gap-1">
-            <Calendar className="h-3.5 w-3.5 text-primary" />
-            Total Payment Transactions
-          </div>
-          <div className="text-xl font-bold font-mono text-foreground mt-0.5">
-            {payments.length} <span className="text-xs font-normal">vouchers</span>
-          </div>
-          <div className="text-[11px] text-muted-foreground mt-0.5">
-            Recorded receipts and disbursement vouchers
-          </div>
-        </div>
-      </div>
 
       {/* Payment Records Table */}
       <Card>

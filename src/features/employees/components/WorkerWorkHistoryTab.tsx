@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react'
-import { Plus, Calendar, Filter, Sparkles } from 'lucide-react'
+import { Calendar, Filter, Scissors } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -8,13 +8,13 @@ import { formatBDT } from '@/lib/calculations/financialCalculations'
 
 interface WorkerWorkHistoryTabProps {
   entries: ProductionEntry[]
-  totalEarnedAllTime: number
+  totalEarnedAllTime?: number
   onLogWork: () => void
 }
 
 export function WorkerWorkHistoryTab({
   entries,
-  totalEarnedAllTime,
+  totalEarnedAllTime: _totalEarnedAllTime,
   onLogWork,
 }: WorkerWorkHistoryTabProps): React.JSX.Element {
   const [startDate, setStartDate] = useState('')
@@ -118,46 +118,10 @@ export function WorkerWorkHistoryTab({
           </div>
 
           <Button size="sm" className="h-8 text-xs" onClick={onLogWork}>
-            <Plus className="h-3.5 w-3.5 mr-1" /> Log Work / কাজ যোগ করুন
+            <Scissors className="h-3.5 w-3.5 mr-1" /> Log Daily Work / কাজ যোগ করুন
           </Button>
         </CardContent>
       </Card>
-
-      {/* Auto Calculation Period Summary */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <div className="bg-primary/5 border border-primary/20 rounded-lg p-3">
-          <div className="text-xs text-muted-foreground">Selected Range Pieces / মোট পিস</div>
-          <div className="text-xl font-bold font-mono text-primary mt-0.5">
-            {periodPieces} <span className="text-xs font-normal">pcs</span>
-          </div>
-          <div className="text-[11px] text-muted-foreground mt-0.5">
-            {filteredEntries.length} work entries in this range
-          </div>
-        </div>
-
-        <div className="bg-status-active/5 border border-status-active/20 rounded-lg p-3">
-          <div className="text-xs text-muted-foreground">Range Earned Total / সময়ের মোট আয়</div>
-          <div className="text-xl font-bold font-mono text-status-active-foreground dark:text-status-active mt-0.5">
-            {formatBDT(periodEarned)}
-          </div>
-          <div className="text-[11px] text-muted-foreground mt-0.5">
-            Sum of pieces × rates for filtered dates
-          </div>
-        </div>
-
-        <div className="bg-muted/40 border border-border rounded-lg p-3">
-          <div className="text-xs text-muted-foreground flex items-center gap-1">
-            <Sparkles className="h-3 w-3 text-amber-500" />
-            Cumulative Earned / সর্বমোট অর্জিত আয়
-          </div>
-          <div className="text-xl font-bold font-mono text-foreground mt-0.5">
-            {formatBDT(totalEarnedAllTime)}
-          </div>
-          <div className="text-[11px] text-muted-foreground mt-0.5">
-            All-time approved production earnings
-          </div>
-        </div>
-      </div>
 
       {/* Work Entries Table */}
       <Card>
@@ -228,6 +192,21 @@ export function WorkerWorkHistoryTab({
                     </tr>
                   ))}
                 </tbody>
+                <tfoot className="border-t border-border bg-muted/20 font-bold text-xs">
+                  <tr>
+                    <td colSpan={3} className="py-2.5 px-3 text-muted-foreground">
+                      Period Total ({filteredEntries.length} records)
+                    </td>
+                    <td className="py-2.5 px-3 text-right font-mono text-foreground font-bold">
+                      {periodPieces} pcs
+                    </td>
+                    <td className="py-2.5 px-3 text-right text-muted-foreground">—</td>
+                    <td className="py-2.5 px-3 text-right font-mono text-primary font-bold">
+                      {formatBDT(periodEarned)}
+                    </td>
+                    <td />
+                  </tr>
+                </tfoot>
               </table>
             </div>
           )}

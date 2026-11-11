@@ -6,17 +6,15 @@ import {
   useFieldArray,
   useWatch,
 } from 'react-hook-form'
-import { Plus, Trash2 } from 'lucide-react'
+import { Plus, Trash2, Layers, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
   ProductFormData,
   WHOLESALE_SERIES_PRESET,
 } from './productFormSchema'
-import { productsRepository } from '@/mocks/repositories/productsRepository'
+import { variantsRepository } from '@/mocks/repositories/variantsRepository'
 import { formatBDT } from '@/lib/calculations/financialCalculations'
-import { ProductSizeQuickBar } from './ProductSizeQuickBar'
-import { toast } from 'sonner'
 
 interface ProductVariantsFieldArrayProps {
   control: Control<ProductFormData>
@@ -42,7 +40,7 @@ export function ProductVariantsFieldArray({
   })
 
   useEffect(() => {
-    productsRepository.listSizes().then((sizes) => {
+    variantsRepository.listSizeNames().then((sizes) => {
       setAvailableSizes(sizes)
     })
   }, [])
@@ -60,13 +58,15 @@ export function ProductVariantsFieldArray({
       0
     ) || 0
 
-  const handleApplyFullSeries = () => {
+  const handleApplyStandardSeries = () => {
     replace(WHOLESALE_SERIES_PRESET)
   }
 
-  const handleQuickAddPreset = (sizeName: string) => {
+  const handleAddVariantRow = () => {
+    const existingSizes = new Set(watchedVariants?.map((v) => v.size) || [])
+    const nextSize = availableSizes.find((s) => !existingSizes.has(s)) || availableSizes[0] || '16-20'
     append({
-      size: sizeName,
+      size: nextSize,
       color: '',
       pricePerPiece: 250,
       costPerPiece: 150,
@@ -74,35 +74,35 @@ export function ProductVariantsFieldArray({
     })
   }
 
-  const handleSaveNewCustomSize = async (trimmed: string) => {
-    try {
-      const updated = await productsRepository.addSize(trimmed)
-      setAvailableSizes(updated)
-      append({
-        size: trimmed,
-        color: '',
-        pricePerPiece: 250,
-        costPerPiece: 150,
-        stockPieces: 100,
-      })
-      toast.success(`Size "${trimmed}" added to catalog`)
-    } catch {
-      toast.error('Failed to add size')
-    }
-  }
-
   return (
     <div className="p-3.5 rounded-lg border border-border bg-muted/20 space-y-3">
-      <ProductSizeQuickBar
-        availableSizes={availableSizes}
-        onQuickAddPreset={handleQuickAddPreset}
-        onApplyFullSeries={handleApplyFullSeries}
-        onSaveNewCustomSize={handleSaveNewCustomSize}
-      />
+      {/* Header bar with dynamic indication */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border/50 pb-2">
+        <div>
+          <div className="text-xs font-bold text-foreground uppercase tracking-wider flex items-center gap-1.5">
+            <Layers className="h-4 w-4 text-primary" />
+            Initial Variant & Piece Pricing
+          </div>
+          <p className="text-[11px] text-muted-foreground mt-0.5">
+            Sizes are loaded dynamically from the Variants configuration.
+          </p>
+        </div>
+
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={handleApplyStandardSeries}
+          className="h-7 text-xs border-primary/40 text-primary hover:bg-primary/10 self-start sm:self-auto"
+        >
+          <Sparkles className="h-3 w-3 mr-1" />
+          Apply Standard Series (16-38)
+        </Button>
+      </div>
 
       {/* Variants Table Header */}
       <div className="grid grid-cols-12 gap-2 text-[11px] font-semibold text-muted-foreground px-1">
-        <div className="col-span-4">Size Dropdown *</div>
+        <div className="col-span-4">Size (Dynamic) *</div>
         <div className="col-span-3">Wholesale (৳/pc) *</div>
         <div className="col-span-2">Stock (Pcs) *</div>
         <div className="col-span-2">Cost (৳/pc)</div>
@@ -177,7 +177,7 @@ export function ProductVariantsFieldArray({
                   type="number"
                   step="any"
                   placeholder="150"
-                  className="h-8 text-xs font-mono text-muted-foreground"
+                  className="h-8 text-xs font-mono"
                   {...register(`variants.${index}.costPerPiece`, {
                     valueAsNumber: true,
                   })}
@@ -189,9 +189,10 @@ export function ProductVariantsFieldArray({
                   type="button"
                   variant="ghost"
                   size="sm"
+                  className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
                   onClick={() => remove(index)}
                   disabled={fields.length <= 1}
-                  className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive disabled:opacity-30"
+                  title="Remove variant row"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </Button>
@@ -201,44 +202,30 @@ export function ProductVariantsFieldArray({
         })}
       </div>
 
-      {errors.variants?.message && (
-        <p className="text-[11px] text-destructive">{errors.variants.message}</p>
-      )}
-
-      {/* Footer Actions & Live Metrics Summary */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-border/50">
+      {/* Add Variant Button & Valuation Summary */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-1 border-t border-border/40">
         <Button
           type="button"
           size="sm"
           variant="outline"
-          onClick={() =>
-            append({
-              size: availableSizes[0] || '16-20',
-              color: '',
-              pricePerPiece: 280,
-              costPerPiece: 175,
-              stockPieces: 50,
-            })
-          }
-          className="h-7 text-xs"
+          className="h-8 text-xs text-primary border-primary/30 hover:bg-primary/10 self-start"
+          onClick={handleAddVariantRow}
         >
-          <Plus className="h-3 w-3 mr-1" />
-          Add Size Row
+          <Plus className="h-3.5 w-3.5 mr-1" />
+          Add Size Variant
         </Button>
 
-        <div className="flex items-center gap-2.5 text-xs bg-background/80 px-2.5 py-1 rounded border border-border">
-          <span className="text-muted-foreground">
-            Sizes: <strong className="text-foreground">{fields.length}</strong>
+        <div className="flex items-center gap-3 text-xs text-muted-foreground self-end sm:self-auto">
+          <span>
+            Total Stock:{' '}
+            <strong className="text-foreground font-mono">{totalPieces} pcs</strong>
           </span>
-          <span className="text-muted-foreground">|</span>
-          <span className="text-muted-foreground">
-            Total Pieces:{' '}
-            <strong className="text-primary">{totalPieces.toLocaleString()} pcs</strong>
-          </span>
-          <span className="text-muted-foreground">|</span>
-          <span className="text-muted-foreground">
-            Valuation:{' '}
-            <strong className="text-foreground">{formatBDT(totalValuation)}</strong>
+          <span>•</span>
+          <span>
+            Est. Wholesale Value:{' '}
+            <strong className="text-primary font-mono font-semibold">
+              {formatBDT(totalValuation)}
+            </strong>
           </span>
         </div>
       </div>
