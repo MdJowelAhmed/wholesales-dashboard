@@ -4,6 +4,9 @@ import {
 } from '@/types/products'
 import { generateId } from '@/lib/ids'
 import { mockStorage } from '../storage/localStorageAdapter'
+import { STORAGE_SCOPES } from '../storage/storageScopes'
+
+const PRODUCT_WRITE_SCOPES = [STORAGE_SCOPES.PRODUCTS, STORAGE_SCOPES.INVENTORY] as const
 import { variantsRepository } from './variantsRepository'
 
 export interface ListProductsFilter {
@@ -53,7 +56,7 @@ export class ProductsRepository {
       createdAt: new Date().toISOString(),
     }
     db.products = [newProduct, ...db.products]
-    mockStorage.saveDatabase(db)
+    mockStorage.saveDatabase(db, [...PRODUCT_WRITE_SCOPES])
     return newProduct
   }
 
@@ -74,7 +77,7 @@ export class ProductsRepository {
     const nextProducts = [...db.products]
     nextProducts[index] = updated
     db.products = nextProducts
-    mockStorage.saveDatabase(db)
+    mockStorage.saveDatabase(db, [...PRODUCT_WRITE_SCOPES])
     return updated
   }
 
@@ -83,7 +86,7 @@ export class ProductsRepository {
     const filtered = db.products.filter((p) => p.id !== id)
     if (filtered.length === db.products.length) return false
     db.products = filtered
-    mockStorage.saveDatabase(db)
+    mockStorage.saveDatabase(db, [...PRODUCT_WRITE_SCOPES])
     return true
   }
 
@@ -100,7 +103,7 @@ export class ProductsRepository {
       id: generateId('var'),
     }
     product.variants = [...product.variants, newVariant]
-    mockStorage.saveDatabase(db)
+    mockStorage.saveDatabase(db, [...PRODUCT_WRITE_SCOPES])
     return product
   }
 

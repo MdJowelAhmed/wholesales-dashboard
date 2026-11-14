@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { screen } from '@testing-library/react'
+import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { renderWithProviders } from '@/test/helpers/test-utils'
 import { ShopkeepersListPage } from './ShopkeepersListPage'
@@ -14,9 +14,9 @@ describe('ShopkeepersListPage', () => {
     renderWithProviders(<ShopkeepersListPage />, { initialEntries: ['/shopkeepers'] })
 
     expect(await screen.findByText('Wholesale Shopkeepers')).toBeInTheDocument()
-    expect(screen.getByText('Total Receivables')).toBeInTheDocument()
-    expect(screen.getByText('Haji Garments Wholesale')).toBeInTheDocument()
-    expect(screen.getByText(/Alhaj Mokhlesur Rahman/i)).toBeInTheDocument()
+    expect(await screen.findByText('Total Receivables')).toBeInTheDocument()
+    expect(await screen.findByText('Haji Garments Wholesale')).toBeInTheDocument()
+    expect(await screen.findByText(/Alhaj Mokhlesur Rahman/i)).toBeInTheDocument()
   })
 
   it('filters shopkeepers list on market search', async () => {
@@ -28,7 +28,12 @@ describe('ShopkeepersListPage', () => {
     const searchInput = screen.getByPlaceholderText(/Search shop name, owner, market, or phone/i)
     await user.type(searchInput, 'Keraniganj')
 
-    expect(screen.getByText(/Bhai Bhai Cloth Store/i)).toBeInTheDocument()
-    expect(screen.queryByText('Haji Garments Wholesale')).not.toBeInTheDocument()
+    await waitFor(
+      () => {
+        expect(screen.getByText(/Bhai Bhai Cloth Store/i)).toBeInTheDocument()
+        expect(screen.queryByText('Haji Garments Wholesale')).not.toBeInTheDocument()
+      },
+      { timeout: 1500 }
+    )
   })
 })

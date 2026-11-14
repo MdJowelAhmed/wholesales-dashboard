@@ -8,7 +8,7 @@ import { DataTable, ColumnDef } from '@/components/shared/DataTable/DataTable'
 import { TableSkeleton, CardGridSkeleton } from '@/components/shared/StateFeedbacks'
 import { Button } from '@/components/ui/button'
 import { productsRepository } from '@/mocks/repositories/productsRepository'
-import { useRepositoryQuery } from '@/lib/hooks'
+import { useRepositoryQuery, QUERY_INVALIDATION_SCOPES } from '@/lib/hooks'
 import { Product } from '@/types/products'
 import { AddProductDialog } from '../components/AddProductDialog'
 import { formatBDT } from '@/lib/calculations/financialCalculations'
@@ -16,7 +16,7 @@ import { formatBDT } from '@/lib/calculations/financialCalculations'
 export function ProductsListPage(): React.JSX.Element {
   const { data: products = [], loading, refetch } = useRepositoryQuery(
     () => productsRepository.listProducts(),
-    { initialData: [] }
+    { initialData: [], invalidationScopes: [...QUERY_INVALIDATION_SCOPES.products] }
   )
   const [addDialogOpen, setAddDialogOpen] = useState(false)
   const [categoryFilter, setCategoryFilter] = useState('all')
@@ -43,7 +43,7 @@ export function ProductsListPage(): React.JSX.Element {
     return Array.from(new Set(products.map((p) => p.category).filter(Boolean)))
   }, [products])
 
-  const columns: ColumnDef<Product>[] = [
+  const columns: ColumnDef<Product>[] = useMemo(() => [
     {
       key: 'name',
       header: 'Product / Model',
@@ -144,7 +144,7 @@ export function ProductsListPage(): React.JSX.Element {
         </Button>
       ),
     },
-  ]
+  ], [navigate])
 
   return (
     <div className="space-y-6">

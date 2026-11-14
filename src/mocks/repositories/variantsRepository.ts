@@ -8,6 +8,9 @@ import {
 } from '@/types/variants'
 import { generateId } from '@/lib/ids'
 import { mockStorage } from '../storage/localStorageAdapter'
+import { STORAGE_SCOPES } from '../storage/storageScopes'
+
+const VARIANT_WRITE_SCOPES = [STORAGE_SCOPES.VARIANTS, STORAGE_SCOPES.PRODUCTS] as const
 
 export class VariantsRepository {
   // --- CATEGORIES ---
@@ -15,7 +18,7 @@ export class VariantsRepository {
     const db = mockStorage.getDatabase()
     if (!db.categoryItems || db.categoryItems.length === 0) {
       db.categoryItems = [...INITIAL_CATEGORY_ITEMS]
-      mockStorage.saveDatabase(db)
+      mockStorage.saveDatabase(db, [...VARIANT_WRITE_SCOPES])
     }
     return [...db.categoryItems]
   }
@@ -41,7 +44,7 @@ export class VariantsRepository {
 
     db.categoryItems = [...db.categoryItems, newItem]
     db.categories = db.categoryItems.map((c) => c.name)
-    mockStorage.saveDatabase(db)
+    mockStorage.saveDatabase(db, [...VARIANT_WRITE_SCOPES])
     return newItem
   }
 
@@ -66,7 +69,7 @@ export class VariantsRepository {
     nextList[index] = updated
     db.categoryItems = nextList
     db.categories = db.categoryItems.map((c) => c.name)
-    mockStorage.saveDatabase(db)
+    mockStorage.saveDatabase(db, [...VARIANT_WRITE_SCOPES])
     return updated
   }
 
@@ -81,7 +84,7 @@ export class VariantsRepository {
 
     db.categoryItems = filtered
     db.categories = filtered.map((c) => c.name)
-    mockStorage.saveDatabase(db)
+    mockStorage.saveDatabase(db, [...VARIANT_WRITE_SCOPES])
     return true
   }
 
@@ -90,7 +93,7 @@ export class VariantsRepository {
     const db = mockStorage.getDatabase()
     if (!db.sizeItems || db.sizeItems.length === 0) {
       db.sizeItems = [...INITIAL_SIZE_ITEMS]
-      mockStorage.saveDatabase(db)
+      mockStorage.saveDatabase(db, [...VARIANT_WRITE_SCOPES])
     }
     return [...db.sizeItems]
   }
@@ -116,7 +119,7 @@ export class VariantsRepository {
 
     db.sizeItems = [...db.sizeItems, newItem]
     db.productSizes = db.sizeItems.map((s) => s.name)
-    mockStorage.saveDatabase(db)
+    mockStorage.saveDatabase(db, [...VARIANT_WRITE_SCOPES])
     return newItem
   }
 
@@ -141,7 +144,7 @@ export class VariantsRepository {
     nextList[index] = updated
     db.sizeItems = nextList
     db.productSizes = db.sizeItems.map((s) => s.name)
-    mockStorage.saveDatabase(db)
+    mockStorage.saveDatabase(db, [...VARIANT_WRITE_SCOPES])
     return updated
   }
 
@@ -156,7 +159,7 @@ export class VariantsRepository {
 
     db.sizeItems = filtered
     db.productSizes = filtered.map((s) => s.name)
-    mockStorage.saveDatabase(db)
+    mockStorage.saveDatabase(db, [...VARIANT_WRITE_SCOPES])
     return true
   }
 
@@ -165,7 +168,7 @@ export class VariantsRepository {
     const db = mockStorage.getDatabase()
     if (!db.colorItems || db.colorItems.length === 0) {
       db.colorItems = [...INITIAL_COLOR_ITEMS]
-      mockStorage.saveDatabase(db)
+      mockStorage.saveDatabase(db, [...VARIANT_WRITE_SCOPES])
     }
     return [...db.colorItems]
   }
@@ -190,7 +193,7 @@ export class VariantsRepository {
     }
 
     db.colorItems = [...db.colorItems, newItem]
-    mockStorage.saveDatabase(db)
+    mockStorage.saveDatabase(db, [...VARIANT_WRITE_SCOPES])
     return newItem
   }
 
@@ -214,7 +217,7 @@ export class VariantsRepository {
     const nextList = [...db.colorItems]
     nextList[index] = updated
     db.colorItems = nextList
-    mockStorage.saveDatabase(db)
+    mockStorage.saveDatabase(db, [...VARIANT_WRITE_SCOPES])
     return updated
   }
 
@@ -228,7 +231,7 @@ export class VariantsRepository {
     if (filtered.length === db.colorItems.length) return false
 
     db.colorItems = filtered
-    mockStorage.saveDatabase(db)
+    mockStorage.saveDatabase(db, [...VARIANT_WRITE_SCOPES])
     return true
   }
 }

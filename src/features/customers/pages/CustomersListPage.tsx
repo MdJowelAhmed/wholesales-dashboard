@@ -8,7 +8,7 @@ import { DataTable, ColumnDef } from '@/components/shared/DataTable/DataTable'
 import { TableSkeleton, CardGridSkeleton } from '@/components/shared/StateFeedbacks'
 import { Button } from '@/components/ui/button'
 import { salesRepository } from '@/mocks/repositories/salesRepository'
-import { useRepositoryQuery } from '@/lib/hooks'
+import { useRepositoryQuery, QUERY_INVALIDATION_SCOPES } from '@/lib/hooks'
 import { Customer } from '@/types/sales'
 import { AddCustomerDialog } from '../components/AddCustomerDialog'
 import { RecordCustomerPaymentDialog } from '../components/RecordCustomerPaymentDialog'
@@ -17,7 +17,7 @@ import { formatBDT } from '@/lib/calculations/financialCalculations'
 export function CustomersListPage(): React.JSX.Element {
   const { data: customers = [], loading, refetch } = useRepositoryQuery(
     () => salesRepository.listCustomers(),
-    { initialData: [] }
+    { initialData: [], invalidationScopes: [...QUERY_INVALIDATION_SCOPES.customers] }
   )
   const [addDialogOpen, setAddDialogOpen] = useState(false)
   const [payCust, setPayCust] = useState<Customer | null>(null)

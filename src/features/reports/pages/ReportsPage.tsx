@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useMemo } from 'react'
 import {
   BarChart3,
   Printer,
@@ -17,56 +17,67 @@ import { FinishedGoodsStockItem } from '@/types/inventory'
 import { Shopkeeper } from '@/types/shopkeepers'
 import { ExpenseRecord, PayrollRecord } from '@/types/finance'
 import { RawMaterial } from '@/types/rawMaterials'
-import { calculatePnLMetrics } from '@/lib/calculations/financialCalculations'
+import {
+  calculatePnLMetrics,
+  calculateRawMaterialInventoryValuation,
+} from '@/lib/calculations/financialCalculations'
 import { exportToCsv } from '@/lib/utils/csvExport'
 import { toast } from 'sonner'
+import { useRepositoryQuery, QUERY_INVALIDATION_SCOPES } from '@/lib/hooks'
 import { SalesReportTab } from '../components/SalesReportTab'
 import { InventoryReportTab } from '../components/InventoryReportTab'
 import { ReceivablesReportTab } from '../components/ReceivablesReportTab'
 import { PnlReportTab } from '../components/PnlReportTab'
 
-export function ReportsPage() {
-  const [sales, setSales] = useState<Sale[]>([])
-  const [stock, setStock] = useState<FinishedGoodsStockItem[]>([])
-  const [materials, setMaterials] = useState<RawMaterial[]>([])
-  const [shopkeepers, setShopkeepers] = useState<Shopkeeper[]>([])
-  const [expenses, setExpenses] = useState<ExpenseRecord[]>([])
-  const [payroll, setPayroll] = useState<PayrollRecord[]>([])
-  const [loading, setLoading] = useState(true)
+interface ReportsData {
+  sales: Sale[]
+  stock: FinishedGoodsStockItem[]
+  materials: RawMaterial[]
+  shopkeepers: Shopkeeper[]
+  expenses: ExpenseRecord[]
+  payroll: PayrollRecord[]
+}
 
+export function ReportsPage() {
   const [activeReport, setActiveReport] = useState<'sales' | 'inventory' | 'receivables' | 'pnl'>('sales')
 
-  useEffect(() => {
-    async function loadReportData() {
-      try {
-        setLoading(true)
-        const [salesData, stockData, matData, skData, expData, pyrData] = await Promise.all([
-          salesRepository.listSales(),
-          inventoryRepository.getFinishedGoodsStock(),
-          inventoryRepository.getRawMaterialsStock(),
-          shopkeepersRepository.listShopkeepers(),
-          financeRepository.listExpenses(),
-          financeRepository.listPayroll(),
-        ])
-        setSales(salesData)
-        setStock(stockData)
-        setMaterials(matData)
-        setShopkeepers(skData)
-        setExpenses(expData)
-        setPayroll(pyrData)
-      } catch (err) {
-        console.error('Failed to load reports data', err)
-      } finally {
-        setLoading(false)
+  const { data, loading } = useRepositoryQuery<ReportsData>(
+    async () => {
+      const [salesData, stockData, matData, skData, expData, pyrData] = await Promise.all([
+        salesRepository.listSales(),
+        inventoryRepository.getFinishedGoodsStock(),
+        inventoryRepository.getRawMaterialsStock(),
+        shopkeepersRepository.listShopkeepers(),
+        financeRepository.listExpenses(),
+        financeRepository.listPayroll(),
+      ])
+      return {
+        sales: salesData,
+        stock: stockData,
+        materials: matData,
+        shopkeepers: skData,
+        expenses: expData,
+        payroll: pyrData,
       }
+    },
+    {
+      initialData: {
+        sales: [],
+        stock: [],
+        materials: [],
+        shopkeepers: [],
+        expenses: [],
+        payroll: [],
+      },
+      invalidationScopes: [...QUERY_INVALIDATION_SCOPES.reports],
     }
-    loadReportData()
-  }, [])
+  )
 
-  // Centralized P&L calculation from financialCalculations
+  const { sales, stock, materials, shopkeepers, expenses, payroll } = data
+
   const pnl = useMemo(() => {
     const totalSalesRevenue = sales.reduce((sum, s) => sum + s.totalAmount, 0)
-    const actualMaterialCost = materials.reduce((sum, m) => sum + (m.averageCost || 0) * Math.max(0, m.reorderThreshold || 0), 0)
+    const actualMaterialCost = calculateRawMaterialInventoryValuation(materials)
     const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0)
     const totalWages = payroll.reduce((sum, p) => sum + p.netPayable, 0)
     const finishedGoodsValuation = stock.reduce((sum, item) => sum + item.valuation, 0)
@@ -84,9 +95,8 @@ export function ReportsPage() {
     }
   }, [sales, materials, stock, expenses, payroll])
 
-  // CSV Export Handlers
   const handleExportSalesCsv = () => {
-    const data = sales.map((s) => ({
+    const rows = sales.map((s) => ({
       'Invoice #': s.invoiceNumber,
       Date: s.date,
       Customer: s.customerName,
@@ -97,12 +107,12 @@ export function ReportsPage() {
       'Outstanding Balance (BDT)': s.outstandingBalance,
       Status: s.status,
     }))
-    exportToCsv('aparajita-sales-collections-report.csv', data)
+    exportToCsv('aparajita-sales-collections-report.csv', rows)
     toast.success('Downloaded Sales & Collections CSV')
   }
 
   const handleExportInventoryCsv = () => {
-    const data = stock.map((st) => ({
+    const rows = stock.map((st) => ({
       SKU: st.sku,
       Product: st.productName,
       Size: st.size,
@@ -111,12 +121,12 @@ export function ReportsPage() {
       'Total Asset Valuation (BDT)': st.valuation,
       ReorderThreshold: st.reorderLevel,
     }))
-    exportToCsv('aparajita-warehouse-inventory-valuation.csv', data)
+    exportToCsv('aparajita-warehouse-inventory-valuation.csv', rows)
     toast.success('Downloaded Inventory Asset Valuation CSV')
   }
 
   const handleExportReceivablesCsv = () => {
-    const data = shopkeepers.map((sk) => ({
+    const rows = shopkeepers.map((sk) => ({
       Shop: sk.shopName,
       Owner: sk.ownerName,
       Market: sk.marketName,
@@ -127,21 +137,21 @@ export function ReportsPage() {
       'Outstanding Balance (BDT)': sk.outstandingBalance,
       'Consignment Held': sk.consignmentPiecesHeld,
     }))
-    exportToCsv('aparajita-wholesale-receivables-aging.csv', data)
+    exportToCsv('aparajita-wholesale-receivables-aging.csv', rows)
     toast.success('Downloaded Wholesale Receivables CSV')
   }
 
   const handleExportPnlCsv = () => {
-    const data = [
+    const rows = [
       { Metric: 'Gross Commercial Revenue (Sales)', 'Amount (BDT)': pnl.grossRevenue },
-      { Metric: 'Cost of Raw Materials Consumed', 'Amount (BDT)': -pnl.actualMaterialCost },
+      { Metric: 'Raw Material Inventory Valuation (COGS proxy)', 'Amount (BDT)': -pnl.actualMaterialCost },
       { Metric: 'Gross Manufacturing Margin', 'Amount (BDT)': pnl.grossRevenue - pnl.actualMaterialCost },
       { Metric: 'Worker Payroll & Tailor Wages', 'Amount (BDT)': -pnl.totalWages },
       { Metric: 'Factory Overhead Expenses', 'Amount (BDT)': -pnl.totalExpenses },
       { Metric: 'Net Operating Profit (EBITDA)', 'Amount (BDT)': pnl.netOperatingProfit },
       { Metric: 'Finished Goods Inventory Asset Valuation', 'Amount (BDT)': pnl.finishedGoodsValuation },
     ]
-    exportToCsv('aparajita-factory-pnl-summary.csv', data)
+    exportToCsv('aparajita-factory-pnl-summary.csv', rows)
     toast.success('Downloaded Factory P&L CSV')
   }
 
@@ -178,7 +188,6 @@ export function ReportsPage() {
         </div>
       </div>
 
-      {/* Report Switcher Tabs */}
       <div className="flex flex-wrap gap-2 border-b border-border pb-3">
         <Button
           variant={activeReport === 'sales' ? 'default' : 'outline'}
@@ -222,7 +231,6 @@ export function ReportsPage() {
         </Button>
       </div>
 
-      {/* Tab Contents */}
       {activeReport === 'sales' && (
         <SalesReportTab sales={sales} onExportCsv={handleExportSalesCsv} />
       )}

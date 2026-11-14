@@ -8,7 +8,7 @@ import { EmptyState, TableSkeleton, CardGridSkeleton } from '@/components/shared
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { productsRepository } from '@/mocks/repositories/productsRepository'
-import { useRepositoryQuery } from '@/lib/hooks'
+import { useRepositoryQuery, QUERY_INVALIDATION_SCOPES } from '@/lib/hooks'
 import { Product } from '@/types/products'
 import { AddVariantDialog } from '../components/AddVariantDialog'
 import { formatBDT } from '@/lib/calculations/financialCalculations'
@@ -23,7 +23,7 @@ export function ProductDetailsPage(): React.JSX.Element {
       if (!id) return null
       return productsRepository.getProductById(id)
     },
-    { deps: [id], initialData: null }
+    { deps: [id], initialData: null, invalidationScopes: [...QUERY_INVALIDATION_SCOPES.products] }
   )
 
   const handleRefetch = () => {

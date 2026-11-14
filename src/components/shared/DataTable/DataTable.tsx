@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
+import { useDebounce } from '@/lib/hooks/useDebounce'
 import {
   ChevronLeft,
   ChevronRight,
@@ -47,15 +48,20 @@ export function DataTable<T extends { id?: string | number }>({
   className,
 }: DataTableProps<T>): React.JSX.Element {
   const [searchTerm, setSearchTerm] = useState('')
+  const debouncedSearchTerm = useDebounce(searchTerm, 280)
   const [sortKey, setSortKey] = useState<string | null>(null)
   const [sortAsc, setSortAsc] = useState(true)
   const [currentPage, setCurrentPage] = useState(1)
 
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [debouncedSearchTerm])
+
   // Filter
   const filteredData = useMemo(() => {
-    if (!searchTerm.trim() || !searchKey) return data
+    if (!debouncedSearchTerm.trim() || !searchKey) return data
 
-    const query = searchTerm.toLowerCase()
+    const query = debouncedSearchTerm.toLowerCase()
     return data.filter((row) => {
       let val = ''
       if (typeof searchKey === 'function') {
@@ -65,7 +71,7 @@ export function DataTable<T extends { id?: string | number }>({
       }
       return val.toLowerCase().includes(query)
     })
-  }, [data, searchTerm, searchKey])
+  }, [data, debouncedSearchTerm, searchKey])
 
   // Sort
   const sortedData = useMemo(() => {

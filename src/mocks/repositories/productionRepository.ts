@@ -6,6 +6,15 @@ import {
 } from '@/lib/calculations/financialCalculations'
 import { generateId } from '@/lib/ids'
 import { mockStorage } from '../storage/localStorageAdapter'
+import { STORAGE_SCOPES } from '../storage/storageScopes'
+
+const PRODUCTION_WRITE_SCOPES = [
+  STORAGE_SCOPES.PRODUCTION,
+  STORAGE_SCOPES.EMPLOYEES,
+  STORAGE_SCOPES.INVENTORY,
+  STORAGE_SCOPES.PRODUCTS,
+  STORAGE_SCOPES.FINANCE,
+] as const
 import { ledgerEngine } from './ledgerEngine'
 import { stockEngine } from './stockEngine'
 
@@ -141,7 +150,7 @@ export class ProductionRepository {
       }
     }
 
-    mockStorage.saveDatabase(db)
+    mockStorage.saveDatabase(db, [...PRODUCTION_WRITE_SCOPES])
     return entry
   }
 
@@ -167,7 +176,7 @@ export class ProductionRepository {
       createdAt: new Date().toISOString(),
     }
     db.productionOrders = [order, ...db.productionOrders]
-    mockStorage.saveDatabase(db)
+    mockStorage.saveDatabase(db, [...PRODUCTION_WRITE_SCOPES])
     return order
   }
 
@@ -179,7 +188,7 @@ export class ProductionRepository {
     const order = db.productionOrders.find((o) => o.id === orderId)
     if (!order) throw new Error(`Production order not found: ${orderId}`)
     order.status = status
-    mockStorage.saveDatabase(db)
+    mockStorage.saveDatabase(db, [...PRODUCTION_WRITE_SCOPES])
   }
 
   public async approveEntry(entryId: string): Promise<ProductionEntry> {
@@ -204,7 +213,7 @@ export class ProductionRepository {
         notes: `QC approval: ${entry.goodQuantityPieces} pcs passed`,
       })
       db = res.db
-      mockStorage.saveDatabase(db)
+      mockStorage.saveDatabase(db, [...PRODUCTION_WRITE_SCOPES])
     }
 
     return entry

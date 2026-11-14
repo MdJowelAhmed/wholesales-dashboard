@@ -2,6 +2,7 @@ import { Download, Upload, RotateCcw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { mockStorage } from '@/mocks/storage/localStorageAdapter'
+import { STORAGE_SCOPES } from '@/mocks/storage/storageScopes'
 import { toast } from 'sonner'
 import { getTodayDateString } from '@/lib/utils/date'
 
@@ -32,7 +33,7 @@ export function DataManagementTab() {
         if (!parsed.version) {
           throw new Error('Invalid backup schema')
         }
-        mockStorage.saveDatabase(parsed)
+        mockStorage.saveDatabase(parsed, [STORAGE_SCOPES.ALL])
         toast.success('Successfully restored database from backup!')
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : 'Invalid backup file'

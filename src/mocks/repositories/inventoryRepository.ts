@@ -1,6 +1,9 @@
 import { FinishedGoodsStockItem, InventoryMovement } from '@/types/inventory'
 import { RawMaterial } from '@/types/rawMaterials'
 import { mockStorage } from '../storage/localStorageAdapter'
+import { STORAGE_SCOPES } from '../storage/storageScopes'
+
+const INVENTORY_WRITE_SCOPES = [STORAGE_SCOPES.INVENTORY, STORAGE_SCOPES.PRODUCTS, STORAGE_SCOPES.MATERIALS] as const
 import { stockEngine } from './stockEngine'
 
 export class InventoryRepository {
@@ -38,7 +41,7 @@ export class InventoryRepository {
       notes: input.notes,
     })
 
-    mockStorage.saveDatabase(updatedDb)
+    mockStorage.saveDatabase(updatedDb, [...INVENTORY_WRITE_SCOPES])
   }
 
   public async recordRawMaterialAdjustment(input: {
@@ -59,7 +62,7 @@ export class InventoryRepository {
       notes: input.notes,
     })
 
-    mockStorage.saveDatabase(updatedDb)
+    mockStorage.saveDatabase(updatedDb, [...INVENTORY_WRITE_SCOPES])
   }
 }
 

@@ -15,6 +15,7 @@ import {
   calculatePieceWage,
   calculateDozenWage,
   calculatePnLMetrics,
+  calculateRawMaterialInventoryValuation,
 } from './financialCalculations'
 
 describe('financialCalculations', () => {
@@ -172,6 +173,17 @@ describe('financialCalculations', () => {
       expect(calculatePieceWage(50, 12)).toBe(600)
       expect(calculateDozenWage(24, 120)).toBe(240)
       expect(calculateDozenWage(18, 120)).toBe(180)
+    })
+  })
+
+  describe('calculateRawMaterialInventoryValuation', () => {
+    it('sums available quantity times average cost', () => {
+      expect(
+        calculateRawMaterialInventoryValuation([
+          { availableQuantity: 100, averageCost: 50 },
+          { availableQuantity: 20, averageCost: 200 },
+        ])
+      ).toBe(9000)
     })
   })
 

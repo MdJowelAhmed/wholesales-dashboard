@@ -1,5 +1,8 @@
 import { RawMaterial } from '@/types/rawMaterials'
 import { mockStorage } from '../storage/localStorageAdapter'
+import { STORAGE_SCOPES } from '../storage/storageScopes'
+
+const MATERIAL_WRITE_SCOPES = [STORAGE_SCOPES.MATERIALS, STORAGE_SCOPES.INVENTORY] as const
 
 export class RawMaterialsRepository {
   public async listRawMaterials(category?: string): Promise<RawMaterial[]> {
@@ -31,7 +34,7 @@ export class RawMaterialsRepository {
       ...db,
       materials: [...db.materials, newMaterial],
     }
-    mockStorage.saveDatabase(updatedDb)
+    mockStorage.saveDatabase(updatedDb, [...MATERIAL_WRITE_SCOPES])
     return newMaterial
   }
 
@@ -54,7 +57,7 @@ export class RawMaterialsRepository {
 
     const materials = [...db.materials]
     materials[index] = updated
-    mockStorage.saveDatabase({ ...db, materials })
+    mockStorage.saveDatabase({ ...db, materials }, [...MATERIAL_WRITE_SCOPES])
     return updated
   }
 }

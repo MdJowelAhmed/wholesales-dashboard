@@ -3,6 +3,9 @@ import { LedgerEntry } from '@/types/ledger'
 import { roundCurrency } from '@/lib/calculations/financialCalculations'
 import { generateId } from '@/lib/ids'
 import { mockStorage } from '../storage/localStorageAdapter'
+import { STORAGE_SCOPES } from '../storage/storageScopes'
+
+const FINANCE_WRITE_SCOPES = [STORAGE_SCOPES.FINANCE] as const
 import { ledgerEngine } from './ledgerEngine'
 
 export interface DashboardMetrics {
@@ -130,7 +133,7 @@ export class FinanceRepository {
       createdAt: new Date().toISOString(),
     }
     db.expenses = [expense, ...db.expenses]
-    mockStorage.saveDatabase(db)
+    mockStorage.saveDatabase(db, [...FINANCE_WRITE_SCOPES])
     return expense
   }
 
@@ -204,7 +207,7 @@ export class FinanceRepository {
       }
     }
 
-    mockStorage.saveDatabase(updatedDb)
+    mockStorage.saveDatabase(updatedDb, [...FINANCE_WRITE_SCOPES])
     return payment
   }
 
@@ -273,7 +276,7 @@ export class FinanceRepository {
       }
     }
 
-    mockStorage.saveDatabase(db)
+    mockStorage.saveDatabase(db, [...FINANCE_WRITE_SCOPES])
     return db.payroll
   }
 

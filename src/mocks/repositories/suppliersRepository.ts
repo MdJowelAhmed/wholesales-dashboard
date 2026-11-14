@@ -2,6 +2,9 @@ import { Supplier, SupplierLedgerEntry, SupplierPayment } from '@/types/supplier
 import { roundCurrency } from '@/lib/calculations/financialCalculations'
 import { generateId } from '@/lib/ids'
 import { mockStorage } from '../storage/localStorageAdapter'
+import { STORAGE_SCOPES } from '../storage/storageScopes'
+
+const SUPPLIER_WRITE_SCOPES = [STORAGE_SCOPES.SUPPLIERS, STORAGE_SCOPES.FINANCE, STORAGE_SCOPES.MATERIALS] as const
 import { ledgerEngine } from './ledgerEngine'
 
 export class SuppliersRepository {
@@ -68,7 +71,7 @@ export class SuppliersRepository {
       note: `Payment made (${input.paymentMethod}): ${input.reference}`,
     })
 
-    mockStorage.saveDatabase(updatedDb)
+    mockStorage.saveDatabase(updatedDb, [...SUPPLIER_WRITE_SCOPES])
     return payment
   }
 
@@ -95,7 +98,7 @@ export class SuppliersRepository {
       ...db,
       suppliers: [newSupplier, ...db.suppliers],
     }
-    mockStorage.saveDatabase(updatedDb)
+    mockStorage.saveDatabase(updatedDb, [...SUPPLIER_WRITE_SCOPES])
     return newSupplier
   }
 }

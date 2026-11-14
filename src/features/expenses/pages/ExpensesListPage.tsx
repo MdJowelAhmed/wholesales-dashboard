@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent } from '@/components/ui/card'
 import { financeRepository } from '@/mocks/repositories/financeRepository'
-import { useRepositoryQuery } from '@/lib/hooks'
+import { useRepositoryQuery, QUERY_INVALIDATION_SCOPES } from '@/lib/hooks'
 import { ExpenseRecord } from '@/types/finance'
 import { formatBDT } from '@/lib/calculations/financialCalculations'
 import { AddExpenseDialog } from '../components/AddExpenseDialog'
@@ -28,7 +28,7 @@ export function ExpensesListPage() {
 
   const { data: expenses = [], loading, refetch } = useRepositoryQuery<ExpenseRecord[]>(
     () => financeRepository.listExpenses(),
-    { initialData: [] }
+    { initialData: [], invalidationScopes: [...QUERY_INVALIDATION_SCOPES.expenses] }
   )
 
   const handleRefetch = () => {

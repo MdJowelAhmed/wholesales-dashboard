@@ -11,7 +11,7 @@ import { SummaryCard } from '@/components/shared/SummaryCard/SummaryCard'
 import { TableSkeleton, CardGridSkeleton } from '@/components/shared/StateFeedbacks'
 import { Button } from '@/components/ui/button'
 import { inventoryRepository } from '@/mocks/repositories/inventoryRepository'
-import { useRepositoryQuery } from '@/lib/hooks'
+import { useRepositoryQuery, QUERY_INVALIDATION_SCOPES } from '@/lib/hooks'
 import { InventoryMovement } from '@/types/inventory'
 import { RawMaterial } from '@/types/rawMaterials'
 import { formatBDT } from '@/lib/calculations/financialCalculations'
@@ -50,6 +50,7 @@ export function InventoryManagementPage(): React.JSX.Element {
         materials: [],
         movements: [],
       },
+      invalidationScopes: [...QUERY_INVALIDATION_SCOPES.inventory],
     }
   )
 

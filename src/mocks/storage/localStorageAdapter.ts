@@ -1,10 +1,13 @@
 import { getFreshSeedData, SeedDatabase } from '../seed'
+import { STORAGE_SCOPES, StorageInvalidationScope } from './storageScopes'
 
 const STORAGE_KEY = 'garments_saas_demo_db_v1'
 
+type StorageListener = (changedScopes: StorageInvalidationScope[]) => void
+
 class MockStorage {
   private db: SeedDatabase
-  private listeners: Set<() => void> = new Set()
+  private listeners: Set<StorageListener> = new Set()
 
   constructor() {
     this.db = this.loadFromStorage()
@@ -37,7 +40,10 @@ class MockStorage {
     return this.db
   }
 
-  public saveDatabase(updated: SeedDatabase): void {
+  public saveDatabase(
+    updated: SeedDatabase,
+    changedScopes: StorageInvalidationScope[] = [STORAGE_SCOPES.ALL]
+  ): void {
     this.db = updated
     if (typeof window !== 'undefined') {
       try {
@@ -46,25 +52,25 @@ class MockStorage {
         console.error('Failed to save to localStorage', err)
       }
     }
-    this.notify()
+    this.notify(changedScopes)
   }
 
   public resetDatabase(): void {
     const fresh = getFreshSeedData()
-    this.saveDatabase(fresh)
+    this.saveDatabase(fresh, [STORAGE_SCOPES.ALL])
   }
 
-  public subscribe(listener: () => void): () => void {
+  public subscribe(listener: StorageListener): () => void {
     this.listeners.add(listener)
     return () => {
       this.listeners.delete(listener)
     }
   }
 
-  private notify(): void {
+  private notify(changedScopes: StorageInvalidationScope[]): void {
     this.listeners.forEach((listener) => {
       try {
-        listener()
+        listener(changedScopes)
       } catch (err) {
         console.error('Listener notification error:', err)
       }

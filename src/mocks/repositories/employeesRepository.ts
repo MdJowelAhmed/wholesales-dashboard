@@ -3,6 +3,9 @@ import { ProductionEntry } from '@/types/production'
 import { roundCurrency } from '@/lib/calculations/financialCalculations'
 import { generateId } from '@/lib/ids'
 import { mockStorage } from '../storage/localStorageAdapter'
+import { STORAGE_SCOPES } from '../storage/storageScopes'
+
+const EMPLOYEE_WRITE_SCOPES = [STORAGE_SCOPES.EMPLOYEES, STORAGE_SCOPES.FINANCE, STORAGE_SCOPES.PRODUCTION] as const
 import { ledgerEngine } from './ledgerEngine'
 
 export class EmployeesRepository {
@@ -104,7 +107,7 @@ export class EmployeesRepository {
       note: `Advance given: ${input.notes || 'Cash Advance'}`,
     })
 
-    mockStorage.saveDatabase(updatedDb)
+    mockStorage.saveDatabase(updatedDb, [...EMPLOYEE_WRITE_SCOPES])
     return advance
   }
 
@@ -132,7 +135,7 @@ export class EmployeesRepository {
       note: `Salary/Wage payment issued: ${input.notes || 'Settlement'}`,
     })
 
-    mockStorage.saveDatabase(updatedDb)
+    mockStorage.saveDatabase(updatedDb, [...EMPLOYEE_WRITE_SCOPES])
   }
 
   public async recoverAdvance(input: {
@@ -150,7 +153,7 @@ export class EmployeesRepository {
       Math.max(0, employee.totalAdvancesOutstanding - recovered)
     )
 
-    mockStorage.saveDatabase(db)
+    mockStorage.saveDatabase(db, [...EMPLOYEE_WRITE_SCOPES])
   }
 
   public async createEmployee(
@@ -178,7 +181,7 @@ export class EmployeesRepository {
       ...db,
       employees: [...db.employees, newEmployee],
     }
-    mockStorage.saveDatabase(updatedDb)
+    mockStorage.saveDatabase(updatedDb, [...EMPLOYEE_WRITE_SCOPES])
     return newEmployee
   }
 }

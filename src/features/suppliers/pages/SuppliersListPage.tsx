@@ -8,7 +8,7 @@ import { DataTable, ColumnDef } from '@/components/shared/DataTable/DataTable'
 import { TableSkeleton, CardGridSkeleton } from '@/components/shared/StateFeedbacks'
 import { Button } from '@/components/ui/button'
 import { suppliersRepository } from '@/mocks/repositories/suppliersRepository'
-import { useRepositoryQuery } from '@/lib/hooks'
+import { useRepositoryQuery, QUERY_INVALIDATION_SCOPES } from '@/lib/hooks'
 import { Supplier } from '@/types/suppliers'
 import { AddSupplierDialog } from '../components/AddSupplierDialog'
 import { RecordSupplierPaymentDialog } from '../components/RecordSupplierPaymentDialog'
@@ -17,7 +17,7 @@ import { formatBDT } from '@/lib/calculations/financialCalculations'
 export function SuppliersListPage(): React.JSX.Element {
   const { data: suppliers = [], loading, refetch } = useRepositoryQuery(
     () => suppliersRepository.listSuppliers(),
-    { initialData: [] }
+    { initialData: [], invalidationScopes: [...QUERY_INVALIDATION_SCOPES.suppliers] }
   )
   const [addDialogOpen, setAddDialogOpen] = useState(false)
   const [paySupplier, setPaySupplier] = useState<Supplier | null>(null)

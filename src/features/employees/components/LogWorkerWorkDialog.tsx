@@ -17,7 +17,7 @@ import { variantsRepository } from '@/mocks/repositories/variantsRepository'
 import { Product } from '@/types/products'
 import { Employee } from '@/types/employees'
 import { toast } from 'sonner'
-import { formatBDT, roundCurrency } from '@/lib/calculations/financialCalculations'
+import { formatBDT, calculateEmployeeWage } from '@/lib/calculations/financialCalculations'
 import { getTodayDateString } from '@/lib/utils/date'
 import { WorkerWorkCalculationCard } from './WorkerWorkCalculationCard'
 import { WorkerWorkFormFields } from './WorkerWorkFormFields'
@@ -97,10 +97,20 @@ export function LogWorkerWorkDialog({
   const watchedUnit = useWatch({ control, name: 'unit' }) || 'piece'
 
   const totalPieces = watchedUnit === 'dozen' ? watchedQuantity * 12 : watchedQuantity
-  const calculatedLineTotal =
-    watchedUnit === 'dozen'
-      ? roundCurrency((totalPieces * watchedRate) / 12)
-      : roundCurrency(totalPieces * watchedRate)
+  const calculatedLineTotal = useMemo(() => {
+    if (watchedUnit === 'dozen') {
+      return calculateEmployeeWage({
+        rateType: 'dozen',
+        baseRate: watchedRate,
+        completedDozens: watchedQuantity,
+      })
+    }
+    return calculateEmployeeWage({
+      rateType: 'piece',
+      baseRate: watchedRate,
+      completedPieces: watchedQuantity,
+    })
+  }, [watchedUnit, watchedRate, watchedQuantity])
 
   const handleProductSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const prodId = e.target.value

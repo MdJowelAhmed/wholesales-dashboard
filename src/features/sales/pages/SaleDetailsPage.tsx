@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { salesRepository } from '@/mocks/repositories/salesRepository'
-import { useRepositoryQuery } from '@/lib/hooks'
+import { useRepositoryQuery, QUERY_INVALIDATION_SCOPES } from '@/lib/hooks'
 import { Sale } from '@/types/sales'
 import { formatBDT } from '@/lib/calculations/financialCalculations'
 import { SaleInvoiceItemsList } from '../components/SaleInvoiceItemsList'
@@ -26,7 +26,7 @@ export function SaleDetailsPage() {
       if (!id) return null
       return salesRepository.getSaleById(id)
     },
-    { deps: [id], initialData: null }
+    { deps: [id], initialData: null, invalidationScopes: [...QUERY_INVALIDATION_SCOPES.sales] }
   )
 
   if (loading) {

@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent } from '@/components/ui/card'
 import { financeRepository } from '@/mocks/repositories/financeRepository'
-import { useRepositoryQuery } from '@/lib/hooks'
+import { useRepositoryQuery, QUERY_INVALIDATION_SCOPES } from '@/lib/hooks'
 import { PayrollRecord } from '@/types/finance'
 import { PaymentMethod } from '@/types/common'
 import { formatBDT } from '@/lib/calculations/financialCalculations'
@@ -32,7 +32,7 @@ export function PayrollListPage() {
 
   const { data: payroll = [], loading, refetch } = useRepositoryQuery<PayrollRecord[]>(
     () => financeRepository.listPayroll(),
-    { initialData: [] }
+    { initialData: [], invalidationScopes: [...QUERY_INVALIDATION_SCOPES.payroll] }
   )
 
   const handleRefetch = () => {

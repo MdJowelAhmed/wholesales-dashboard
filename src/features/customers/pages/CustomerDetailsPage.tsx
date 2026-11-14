@@ -9,7 +9,7 @@ import { EmptyState, TableSkeleton, CardGridSkeleton } from '@/components/shared
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { salesRepository } from '@/mocks/repositories/salesRepository'
-import { useRepositoryQuery } from '@/lib/hooks'
+import { useRepositoryQuery, QUERY_INVALIDATION_SCOPES } from '@/lib/hooks'
 import { Customer, CustomerLedgerEntry } from '@/types/sales'
 import { RecordCustomerPaymentDialog } from '../components/RecordCustomerPaymentDialog'
 import { formatBDT } from '@/lib/calculations/financialCalculations'
@@ -28,7 +28,11 @@ export function CustomerDetailsPage(): React.JSX.Element {
       ])
       return { customer, ledger }
     },
-    { deps: [id], initialData: { customer: null, ledger: [] } }
+    {
+      deps: [id],
+      initialData: { customer: null, ledger: [] },
+      invalidationScopes: [...QUERY_INVALIDATION_SCOPES.customers],
+    }
   )
 
   const { customer, ledger } = data

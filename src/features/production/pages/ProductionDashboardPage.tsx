@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/button'
 import { productionRepository } from '@/mocks/repositories/productionRepository'
 import { productsRepository } from '@/mocks/repositories/productsRepository'
 import { employeesRepository } from '@/mocks/repositories/employeesRepository'
-import { useRepositoryQuery } from '@/lib/hooks'
+import { useRepositoryQuery, QUERY_INVALIDATION_SCOPES } from '@/lib/hooks'
 import { ProductionEntry, ProductionOrder } from '@/types/production'
 import { Product } from '@/types/products'
 import { Employee } from '@/types/employees'
@@ -57,6 +57,7 @@ export function ProductionDashboardPage(): React.JSX.Element {
         products: [],
         employees: [],
       },
+      invalidationScopes: [...QUERY_INVALIDATION_SCOPES.production],
     }
   )
 

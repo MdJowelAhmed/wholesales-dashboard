@@ -2,6 +2,9 @@ import { describe, it, expect, vi } from 'vitest'
 import { renderHook, waitFor, act } from '@testing-library/react'
 import { useRepositoryQuery } from './useRepositoryQuery'
 import { useDebounce } from './useDebounce'
+import { mockStorage } from '@/mocks/storage/localStorageAdapter'
+import { STORAGE_SCOPES } from '@/mocks/storage/storageScopes'
+import { productsRepository } from '@/mocks/repositories/productsRepository'
 
 describe('useRepositoryQuery', () => {
   it('fetches data and updates loading state', async () => {
@@ -19,6 +22,36 @@ describe('useRepositoryQuery', () => {
 
     expect(result.current.data).toEqual(['Item 1', 'Item 2'])
     expect(result.current.error).toBeNull()
+  })
+
+  it('skips refetch when storage scope does not overlap', async () => {
+    mockStorage.resetDatabase()
+    const fetcher = vi.fn(async () => productsRepository.listProducts())
+
+    const { result } = renderHook(() =>
+      useRepositoryQuery(fetcher, {
+        initialData: [] as Awaited<ReturnType<typeof productsRepository.listProducts>>,
+        invalidationScopes: [STORAGE_SCOPES.EMPLOYEES],
+      })
+    )
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false)
+    })
+
+    expect(fetcher).toHaveBeenCalledTimes(1)
+
+    const db = mockStorage.getDatabase()
+    mockStorage.saveDatabase(
+      { ...db, products: [...db.products] },
+      [STORAGE_SCOPES.PRODUCTS]
+    )
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+
+    expect(fetcher).toHaveBeenCalledTimes(1)
   })
 
   it('handles fetch errors gracefully', async () => {

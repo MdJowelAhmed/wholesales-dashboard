@@ -13,7 +13,7 @@ import { PrintButton } from '@/components/shared/PrintButton/PrintButton'
 import { EmptyState, TableSkeleton, CardGridSkeleton } from '@/components/shared/StateFeedbacks'
 import { Button } from '@/components/ui/button'
 import { shopkeepersRepository } from '@/mocks/repositories/shopkeepersRepository'
-import { useRepositoryQuery } from '@/lib/hooks'
+import { useRepositoryQuery, QUERY_INVALIDATION_SCOPES } from '@/lib/hooks'
 import {
   Shopkeeper,
   ShopkeeperDelivery,
@@ -68,6 +68,7 @@ export function ShopkeeperDetailsPage(): React.JSX.Element {
         returns: [],
         ledger: [],
       },
+      invalidationScopes: [...QUERY_INVALIDATION_SCOPES.shopkeepers],
     }
   )
 

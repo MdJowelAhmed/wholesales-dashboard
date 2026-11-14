@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { screen } from '@testing-library/react'
+import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { renderWithProviders } from '@/test/helpers/test-utils'
 import { ProductsListPage } from './ProductsListPage'
@@ -31,8 +31,13 @@ describe('ProductsListPage', () => {
     const searchInput = screen.getByPlaceholderText(/Search by product name/i)
     await user.type(searchInput, 'Frock')
 
-    expect(screen.getByText("Girls' Embroidered Party Frock")).toBeInTheDocument()
-    expect(screen.queryByText("Boys' Pique Polo Shirt")).not.toBeInTheDocument()
+    await waitFor(
+      () => {
+        expect(screen.getByText("Girls' Embroidered Party Frock")).toBeInTheDocument()
+        expect(screen.queryByText("Boys' Pique Polo Shirt")).not.toBeInTheDocument()
+      },
+      { timeout: 1500 }
+    )
   })
 
   it('opens Add Product dialog when button is clicked', async () => {

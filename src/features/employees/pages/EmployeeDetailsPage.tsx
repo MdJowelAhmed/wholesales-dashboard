@@ -17,7 +17,7 @@ import { EmptyState, TableSkeleton, CardGridSkeleton } from '@/components/shared
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { employeesRepository } from '@/mocks/repositories/employeesRepository'
-import { useRepositoryQuery } from '@/lib/hooks'
+import { useRepositoryQuery, QUERY_INVALIDATION_SCOPES } from '@/lib/hooks'
 import { Employee, EmployeePaymentItem } from '@/types/employees'
 import { ProductionEntry } from '@/types/production'
 import { RecordAdvanceDialog } from '../components/RecordAdvanceDialog'
@@ -51,7 +51,11 @@ export function EmployeeDetailsPage(): React.JSX.Element {
       ])
       return { employee, workEntries, paymentHistory }
     },
-    { deps: [id], initialData: { employee: null, workEntries: [], paymentHistory: [] } }
+    {
+      deps: [id],
+      initialData: { employee: null, workEntries: [], paymentHistory: [] },
+      invalidationScopes: [...QUERY_INVALIDATION_SCOPES.employees],
+    }
   )
 
   const { employee, workEntries, paymentHistory } = data

@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent } from '@/components/ui/card'
 import { shopkeepersRepository } from '@/mocks/repositories/shopkeepersRepository'
-import { useRepositoryQuery } from '@/lib/hooks'
+import { useRepositoryQuery, QUERY_INVALIDATION_SCOPES } from '@/lib/hooks'
 import { Shopkeeper } from '@/types/shopkeepers'
 import { formatBDT } from '@/lib/calculations/financialCalculations'
 import { DispatchDeliveryDialog } from '../components/DispatchDeliveryDialog'
@@ -45,6 +45,7 @@ export function DeliveriesListPage() {
         deliveries: [],
         shopkeepers: [],
       },
+      invalidationScopes: [...QUERY_INVALIDATION_SCOPES.deliveries],
     }
   )
 

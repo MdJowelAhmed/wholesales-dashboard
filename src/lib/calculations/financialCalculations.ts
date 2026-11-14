@@ -172,6 +172,19 @@ export function calculateRawMaterialConsumption(
 }
 
 /**
+ * Values on-hand raw material stock using quantity × average cost (inventory asset proxy for P&L COGS context).
+ */
+export function calculateRawMaterialInventoryValuation(
+  materials: Array<{ availableQuantity: number; averageCost: number }>
+): number {
+  const total = materials.reduce(
+    (sum, material) => sum + Math.max(0, material.availableQuantity) * Math.max(0, material.averageCost),
+    0
+  )
+  return roundCurrency(total)
+}
+
+/**
  * Calculates net payable wages after deductions and advances
  */
 export function calculateNetPayrollPayable({

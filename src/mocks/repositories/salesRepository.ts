@@ -6,6 +6,15 @@ import {
 } from '@/lib/calculations/financialCalculations'
 import { generateId } from '@/lib/ids'
 import { mockStorage } from '../storage/localStorageAdapter'
+import { STORAGE_SCOPES } from '../storage/storageScopes'
+
+const SALES_WRITE_SCOPES = [
+  STORAGE_SCOPES.SALES,
+  STORAGE_SCOPES.FINANCE,
+  STORAGE_SCOPES.INVENTORY,
+  STORAGE_SCOPES.CUSTOMERS,
+  STORAGE_SCOPES.SHOPKEEPERS,
+] as const
 import { ledgerEngine } from './ledgerEngine'
 import { stockEngine } from './stockEngine'
 
@@ -177,7 +186,7 @@ export class SalesRepository {
       }
     }
 
-    mockStorage.saveDatabase(db)
+    mockStorage.saveDatabase(db, [...SALES_WRITE_SCOPES])
     return sale
   }
 
@@ -203,7 +212,7 @@ export class SalesRepository {
       ...db,
       customers: [newCustomer, ...db.customers],
     }
-    mockStorage.saveDatabase(updatedDb)
+    mockStorage.saveDatabase(updatedDb, [...SALES_WRITE_SCOPES])
     return newCustomer
   }
 
@@ -236,7 +245,7 @@ export class SalesRepository {
       note: input.notes || `Payment received (${input.paymentMethod})`,
     })
 
-    mockStorage.saveDatabase(updatedDb)
+    mockStorage.saveDatabase(updatedDb, [...SALES_WRITE_SCOPES])
   }
 }
 

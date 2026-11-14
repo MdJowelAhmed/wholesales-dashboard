@@ -8,7 +8,7 @@ import { DataTable, ColumnDef } from '@/components/shared/DataTable/DataTable'
 import { TableSkeleton, CardGridSkeleton } from '@/components/shared/StateFeedbacks'
 import { Button } from '@/components/ui/button'
 import { shopkeepersRepository } from '@/mocks/repositories/shopkeepersRepository'
-import { useRepositoryQuery } from '@/lib/hooks'
+import { useRepositoryQuery, QUERY_INVALIDATION_SCOPES } from '@/lib/hooks'
 import { Shopkeeper } from '@/types/shopkeepers'
 import { AddShopkeeperDialog } from '../components/AddShopkeeperDialog'
 import { RecordDeliveryDialog } from '../components/RecordDeliveryDialog'
@@ -18,7 +18,7 @@ import { formatBDT } from '@/lib/calculations/financialCalculations'
 export function ShopkeepersListPage(): React.JSX.Element {
   const { data: shopkeepers = [], loading, refetch } = useRepositoryQuery(
     () => shopkeepersRepository.listShopkeepers(),
-    { initialData: [] }
+    { initialData: [], invalidationScopes: [...QUERY_INVALIDATION_SCOPES.shopkeepers] }
   )
   const [addDialogOpen, setAddDialogOpen] = useState(false)
   const [deliveryShop, setDeliveryShop] = useState<Shopkeeper | null>(null)

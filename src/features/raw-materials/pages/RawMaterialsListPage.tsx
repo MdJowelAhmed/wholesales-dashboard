@@ -7,7 +7,7 @@ import { DataTable, ColumnDef } from '@/components/shared/DataTable/DataTable'
 import { TableSkeleton, CardGridSkeleton } from '@/components/shared/StateFeedbacks'
 import { Button } from '@/components/ui/button'
 import { rawMaterialsRepository } from '@/mocks/repositories/rawMaterialsRepository'
-import { useRepositoryQuery } from '@/lib/hooks'
+import { useRepositoryQuery, QUERY_INVALIDATION_SCOPES } from '@/lib/hooks'
 import { RawMaterial } from '@/types/rawMaterials'
 import { AddRawMaterialDialog } from '../components/AddRawMaterialDialog'
 import { formatBDT } from '@/lib/calculations/financialCalculations'
@@ -15,7 +15,7 @@ import { formatBDT } from '@/lib/calculations/financialCalculations'
 export function RawMaterialsListPage(): React.JSX.Element {
   const { data: materials = [], loading, refetch } = useRepositoryQuery(
     () => rawMaterialsRepository.listRawMaterials(),
-    { initialData: [] }
+    { initialData: [], invalidationScopes: [...QUERY_INVALIDATION_SCOPES.materials] }
   )
   const [addDialogOpen, setAddDialogOpen] = useState(false)
   const [categoryFilter, setCategoryFilter] = useState('all')

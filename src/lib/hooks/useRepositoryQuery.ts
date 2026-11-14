@@ -1,10 +1,17 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { mockStorage } from '@/mocks/storage/localStorageAdapter'
+import {
+  STORAGE_SCOPES,
+  scopesShouldInvalidate,
+  StorageInvalidationScope,
+} from '@/mocks/storage/storageScopes'
 
 export interface UseRepositoryQueryOptions<T> {
   deps?: unknown[]
   subscribe?: boolean
   initialData?: T
+  /** Refetch only when a overlapping storage scope is invalidated */
+  invalidationScopes?: StorageInvalidationScope[]
 }
 
 export interface UseRepositoryQueryResult<T> {
@@ -22,7 +29,14 @@ export function useRepositoryQuery<T>(
   fetcher: () => Promise<T>,
   options: UseRepositoryQueryOptions<T> = {}
 ): UseRepositoryQueryResult<T> {
-  const { deps = [], subscribe = true, initialData } = options
+  const {
+    deps = [],
+    subscribe = true,
+    initialData,
+    invalidationScopes = [STORAGE_SCOPES.ALL],
+  } = options
+  const watchedScopesRef = useRef(invalidationScopes)
+  watchedScopesRef.current = invalidationScopes
   const [data, setData] = useState<T>(initialData as T)
   const [loading, setLoading] = useState<boolean>(true)
   const [error, setError] = useState<Error | null>(null)
@@ -55,8 +69,10 @@ export function useRepositoryQuery<T>(
 
     let unsubscribe: (() => void) | undefined
     if (subscribe) {
-      unsubscribe = mockStorage.subscribe(() => {
-        executeFetch()
+      unsubscribe = mockStorage.subscribe((changedScopes) => {
+        if (scopesShouldInvalidate(changedScopes, watchedScopesRef.current)) {
+          executeFetch()
+        }
       })
     }
 

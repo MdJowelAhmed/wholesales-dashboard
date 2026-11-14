@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent } from '@/components/ui/card'
 import { financeRepository } from '@/mocks/repositories/financeRepository'
-import { useRepositoryQuery } from '@/lib/hooks'
+import { useRepositoryQuery, QUERY_INVALIDATION_SCOPES } from '@/lib/hooks'
 import { PaymentRecord } from '@/types/finance'
 import { formatBDT } from '@/lib/calculations/financialCalculations'
 import { RecordUnifiedPaymentDialog } from '../components/RecordUnifiedPaymentDialog'
@@ -26,7 +26,7 @@ export function PaymentsListPage() {
 
   const { data: payments = [], loading, refetch } = useRepositoryQuery<PaymentRecord[]>(
     () => financeRepository.listPayments(),
-    { initialData: [] }
+    { initialData: [], invalidationScopes: [...QUERY_INVALIDATION_SCOPES.payments] }
   )
 
   const handleRefetch = () => {

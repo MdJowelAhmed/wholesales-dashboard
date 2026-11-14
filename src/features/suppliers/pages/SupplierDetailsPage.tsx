@@ -9,7 +9,7 @@ import { EmptyState, TableSkeleton, CardGridSkeleton } from '@/components/shared
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { suppliersRepository } from '@/mocks/repositories/suppliersRepository'
-import { useRepositoryQuery } from '@/lib/hooks'
+import { useRepositoryQuery, QUERY_INVALIDATION_SCOPES } from '@/lib/hooks'
 import { Supplier, SupplierLedgerEntry } from '@/types/suppliers'
 import { RecordSupplierPaymentDialog } from '../components/RecordSupplierPaymentDialog'
 import { formatBDT } from '@/lib/calculations/financialCalculations'
@@ -28,7 +28,11 @@ export function SupplierDetailsPage(): React.JSX.Element {
       ])
       return { supplier, ledger }
     },
-    { deps: [id], initialData: { supplier: null, ledger: [] } }
+    {
+      deps: [id],
+      initialData: { supplier: null, ledger: [] },
+      invalidationScopes: [...QUERY_INVALIDATION_SCOPES.suppliers],
+    }
   )
 
   const { supplier, ledger } = data

@@ -15,7 +15,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { salesRepository } from '@/mocks/repositories/salesRepository'
 import { productsRepository } from '@/mocks/repositories/productsRepository'
 import { shopkeepersRepository } from '@/mocks/repositories/shopkeepersRepository'
-import { useRepositoryQuery } from '@/lib/hooks'
+import { useRepositoryQuery, QUERY_INVALIDATION_SCOPES } from '@/lib/hooks'
 import { Sale, Customer } from '@/types/sales'
 import { Product } from '@/types/products'
 import { Shopkeeper } from '@/types/shopkeepers'
@@ -59,6 +59,7 @@ export function SalesListPage() {
         customers: [],
         shopkeepers: [],
       },
+      invalidationScopes: [...QUERY_INVALIDATION_SCOPES.sales],
     }
   )
 

@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent } from '@/components/ui/card'
 import { shopkeepersRepository } from '@/mocks/repositories/shopkeepersRepository'
-import { useRepositoryQuery } from '@/lib/hooks'
+import { useRepositoryQuery, QUERY_INVALIDATION_SCOPES } from '@/lib/hooks'
 import { formatBDT } from '@/lib/calculations/financialCalculations'
 import { ProcessUnifiedReturnDialog } from '../components/ProcessUnifiedReturnDialog'
 import { ReturnsTable, ReturnWithShopkeeper } from '../components/ReturnsTable'
@@ -26,7 +26,7 @@ export function ReturnsListPage() {
 
   const { data: returns = [], loading, refetch } = useRepositoryQuery<ReturnWithShopkeeper[]>(
     () => shopkeepersRepository.listAllReturns(),
-    { initialData: [] }
+    { initialData: [], invalidationScopes: [...QUERY_INVALIDATION_SCOPES.returns] }
   )
 
   const handleRefetch = () => {
