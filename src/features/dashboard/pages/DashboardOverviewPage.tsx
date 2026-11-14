@@ -10,6 +10,8 @@ import { financeRepository, DashboardMetrics } from '@/mocks/repositories/financ
 import { productsRepository } from '@/mocks/repositories/productsRepository'
 import { shopkeepersRepository } from '@/mocks/repositories/shopkeepersRepository'
 import { salesRepository } from '@/mocks/repositories/salesRepository'
+import { productionRepository } from '@/mocks/repositories/productionRepository'
+import { ProductionEntry } from '@/types/production'
 import { useRepositoryQuery, QUERY_INVALIDATION_SCOPES } from '@/lib/hooks'
 import { Product } from '@/types/products'
 import { Shopkeeper } from '@/types/shopkeepers'
@@ -21,12 +23,13 @@ import { DashboardLowStockAlertCard } from '../components/DashboardLowStockAlert
 import { DashboardQuickActionsCard } from '../components/DashboardQuickActionsCard'
 import {
   buildCategoryDistribution,
-  buildMonthlySalesTrend,
+  buildMonthlyOperationsTrend,
 } from '../lib/dashboardAggregations'
 
 interface DashboardData {
   metrics: DashboardMetrics | null
   sales: Sale[]
+  productionEntries: ProductionEntry[]
   topShopkeepers: Shopkeeper[]
   products: Product[]
 }
@@ -34,15 +37,17 @@ interface DashboardData {
 export function DashboardOverviewPage(): React.JSX.Element {
   const { data, loading } = useRepositoryQuery<DashboardData>(
     async () => {
-      const [m, sales, sk, p] = await Promise.all([
+      const [m, sales, sk, p, productionEntries] = await Promise.all([
         financeRepository.getDashboardMetrics(),
         salesRepository.listSales(),
         shopkeepersRepository.listShopkeepers(),
         productsRepository.listProducts(),
+        productionRepository.listEntries(),
       ])
       return {
         metrics: m,
         sales,
+        productionEntries,
         topShopkeepers: sk.slice(0, 4),
         products: p,
       }
@@ -51,6 +56,7 @@ export function DashboardOverviewPage(): React.JSX.Element {
       initialData: {
         metrics: null,
         sales: [],
+        productionEntries: [],
         topShopkeepers: [],
         products: [],
       },
@@ -58,7 +64,7 @@ export function DashboardOverviewPage(): React.JSX.Element {
     }
   )
 
-  const { metrics, sales, topShopkeepers, products } = data
+  const { metrics, sales, productionEntries, topShopkeepers, products } = data
 
   const lowStockProducts = useMemo(
     () => products.filter((p) => p.variants?.some((v) => (v.stockPieces ?? 0) <= 50)),
@@ -66,7 +72,10 @@ export function DashboardOverviewPage(): React.JSX.Element {
   )
 
   const categoryDistribution = useMemo(() => buildCategoryDistribution(products), [products])
-  const monthlyTrendData = useMemo(() => buildMonthlySalesTrend(sales), [sales])
+  const monthlyTrendData = useMemo(
+    () => buildMonthlyOperationsTrend(sales, productionEntries),
+    [sales, productionEntries]
+  )
 
   return (
     <div className="space-y-6">

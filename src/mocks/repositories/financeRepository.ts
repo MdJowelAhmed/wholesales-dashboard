@@ -207,7 +207,13 @@ export class FinanceRepository {
       }
     }
 
-    mockStorage.saveDatabase(updatedDb, [...FINANCE_WRITE_SCOPES])
+    const partyScopes: typeof STORAGE_SCOPES[keyof typeof STORAGE_SCOPES][] = [...FINANCE_WRITE_SCOPES]
+    if (input.partyType === 'shopkeeper') partyScopes.push(STORAGE_SCOPES.SHOPKEEPERS)
+    else if (input.partyType === 'customer') partyScopes.push(STORAGE_SCOPES.CUSTOMERS)
+    else if (input.partyType === 'supplier') partyScopes.push(STORAGE_SCOPES.SUPPLIERS)
+    else if (input.partyType === 'employee') partyScopes.push(STORAGE_SCOPES.EMPLOYEES)
+
+    mockStorage.saveDatabase(updatedDb, partyScopes)
     return payment
   }
 

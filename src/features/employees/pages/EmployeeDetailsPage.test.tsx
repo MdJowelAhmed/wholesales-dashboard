@@ -89,6 +89,6 @@ describe('EmployeeDetailsPage', () => {
     // Open Disburse Payment
     const paymentBtn = screen.getByText(/Disburse Payment/i)
     fireEvent.click(paymentBtn)
-    expect(await screen.findByText(/Disburse Wage \/ Salary/i)).toBeInTheDocument()
+    expect(await screen.findByText(/Disburse Wages \/ Salary/i)).toBeInTheDocument()
   })
 })

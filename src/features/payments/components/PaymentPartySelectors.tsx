@@ -23,6 +23,8 @@ interface PaymentPartySelectorsProps {
   onPartyTypeChange: (e: React.ChangeEvent<HTMLSelectElement>) => void
   register: UseFormRegister<PaymentFormData>
   errors: FieldErrors<PaymentFormData>
+  lockParty?: boolean
+  lockedPartyLabel?: string
 }
 
 export function PaymentPartySelectors({
@@ -35,7 +37,28 @@ export function PaymentPartySelectors({
   onPartyTypeChange,
   register,
   errors,
+  lockParty = false,
+  lockedPartyLabel,
 }: PaymentPartySelectorsProps) {
+  if (lockParty && lockedPartyLabel) {
+    return (
+      <>
+        <input type="hidden" {...register('partyType')} />
+        <input type="hidden" {...register('partyId')} />
+        <div className="rounded-lg border border-border bg-muted/20 p-3 text-sm">
+          <div className="text-xs text-muted-foreground mb-1">Payment party</div>
+          <div className="font-semibold text-foreground">{lockedPartyLabel}</div>
+        </div>
+        {partyInfo && (
+          <div className="rounded-lg border border-border bg-muted/20 p-3 flex justify-between items-center text-xs">
+            <span className="text-muted-foreground">{partyInfo.label}:</span>
+            <span className="font-semibold text-foreground">{formatBDT(partyInfo.balance)}</span>
+          </div>
+        )}
+      </>
+    )
+  }
+
   return (
     <>
       <div className="space-y-1">
@@ -43,6 +66,7 @@ export function PaymentPartySelectors({
         <select
           value={selectedPartyType}
           onChange={onPartyTypeChange}
+          disabled={lockParty}
           className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
         >
           <option value="shopkeeper">Wholesale Shopkeeper (Collection In)</option>

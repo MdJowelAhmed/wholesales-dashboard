@@ -1,6 +1,7 @@
 import { Product } from '@/types/products'
 import { Sale } from '@/types/sales'
-import { calculateStockValuation } from '@/lib/calculations/financialCalculations'
+import { ProductionEntry } from '@/types/production'
+import { calculateStockValuation, roundCurrency } from '@/lib/calculations/financialCalculations'
 
 export interface MonthlyTrendPoint {
   month: string
@@ -48,7 +49,11 @@ export function buildCategoryDistribution(products: Product[]): CategoryDistribu
     .sort((a, b) => b.valuation - a.valuation)
 }
 
-export function buildMonthlySalesTrend(sales: Sale[], monthCount = 6): MonthlyTrendPoint[] {
+export function buildMonthlyOperationsTrend(
+  sales: Sale[],
+  productionEntries: ProductionEntry[],
+  monthCount = 6
+): MonthlyTrendPoint[] {
   const now = new Date()
   const buckets: Array<MonthlyTrendPoint & { key: string }> = []
 
@@ -72,9 +77,24 @@ export function buildMonthlySalesTrend(sales: Sale[], monthCount = 6): MonthlyTr
     }
   }
 
+  for (const entry of productionEntries) {
+    const prodDate = new Date(entry.productionDate)
+    if (Number.isNaN(prodDate.getTime())) continue
+    const key = `${prodDate.getFullYear()}-${prodDate.getMonth()}`
+    const bucket = buckets.find((b) => b.key === key)
+    if (bucket) {
+      bucket.production += entry.calculatedWage ?? 0
+    }
+  }
+
   return buckets.map(({ month, sales: salesTotal, production }) => ({
     month,
-    sales: salesTotal,
-    production,
+    sales: roundCurrency(salesTotal),
+    production: roundCurrency(production),
   }))
+}
+
+/** @deprecated Use buildMonthlyOperationsTrend */
+export function buildMonthlySalesTrend(sales: Sale[], monthCount = 6): MonthlyTrendPoint[] {
+  return buildMonthlyOperationsTrend(sales, [], monthCount)
 }

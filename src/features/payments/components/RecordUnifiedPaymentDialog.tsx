@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { CreditCard } from 'lucide-react'
@@ -26,16 +26,35 @@ import { paymentSchema, type PaymentFormData } from './unifiedPaymentSchema'
 import { PaymentPartySelectors } from './PaymentPartySelectors'
 import { PaymentAmountFields } from './PaymentAmountFields'
 
-interface RecordUnifiedPaymentDialogProps {
+export type PaymentPartyType = PaymentFormData['partyType']
+
+export interface RecordUnifiedPaymentDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   onSuccess: () => void
+  /** Pre-select party (used by entity detail/list pages) */
+  presetPartyType?: PaymentPartyType
+  presetPartyId?: string
+  /** Hide party type/party pickers when recording from a known entity */
+  lockParty?: boolean
+  dialogTitle?: string
+  defaultAmount?: number
+  defaultNotes?: string
+  /** Display name when party dropdown is locked */
+  lockedPartyLabel?: string
 }
 
 export function RecordUnifiedPaymentDialog({
   open,
   onOpenChange,
   onSuccess,
+  presetPartyType,
+  presetPartyId,
+  lockParty = false,
+  dialogTitle,
+  defaultAmount = 5000,
+  defaultNotes = '',
+  lockedPartyLabel,
 }: RecordUnifiedPaymentDialogProps): React.JSX.Element {
   const [loading, setLoading] = useState(false)
   const [shopkeepers, setShopkeepers] = useState<Shopkeeper[]>([])
@@ -43,17 +62,19 @@ export function RecordUnifiedPaymentDialog({
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [employees, setEmployees] = useState<Employee[]>([])
 
-  const defaultValues = React.useMemo<PaymentFormData>(
+  const resolvedPartyType = presetPartyType ?? 'shopkeeper'
+
+  const defaultValues = useMemo<PaymentFormData>(
     () => ({
-      partyType: 'shopkeeper',
-      partyId: '',
+      partyType: resolvedPartyType,
+      partyId: presetPartyId ?? '',
       date: getTodayDateString(),
-      amount: 5000,
+      amount: defaultAmount,
       paymentMethod: 'cash',
       reference: '',
-      notes: '',
+      notes: defaultNotes,
     }),
-    []
+    [resolvedPartyType, presetPartyId, defaultAmount, defaultNotes]
   )
 
   const {
@@ -81,7 +102,20 @@ export function RecordUnifiedPaymentDialog({
         setCustomers(custList)
         setSuppliers(supList)
         setEmployees(empList)
-        if (skList.length > 0) {
+
+        if (lockParty && presetPartyId) {
+          setValue('partyType', resolvedPartyType)
+          setValue('partyId', presetPartyId)
+          return
+        }
+
+        if (presetPartyId) {
+          setValue('partyType', resolvedPartyType)
+          setValue('partyId', presetPartyId)
+          return
+        }
+
+        if (resolvedPartyType === 'shopkeeper' && skList.length > 0) {
           setValue('partyId', skList[0].id)
         }
       } catch (err) {
@@ -89,15 +123,17 @@ export function RecordUnifiedPaymentDialog({
       }
     }
     if (open) {
+      reset(defaultValues)
       loadParties()
     }
-  }, [open, setValue])
+  }, [open, setValue, reset, defaultValues, lockParty, presetPartyId, resolvedPartyType])
 
   const selectedPartyType = useWatch({ control, name: 'partyType' })
   const selectedPartyId = useWatch({ control, name: 'partyId' })
 
   const handlePartyTypeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const pType = e.target.value as 'shopkeeper' | 'customer' | 'supplier' | 'employee'
+    if (lockParty) return
+    const pType = e.target.value as PaymentPartyType
     setValue('partyType', pType)
     if (pType === 'shopkeeper' && shopkeepers.length > 0) {
       setValue('partyId', shopkeepers[0].id)
@@ -110,8 +146,29 @@ export function RecordUnifiedPaymentDialog({
     }
   }
 
-  // Get active party info for balance helper
   const getSelectedPartyDetails = () => {
+    if (lockParty && lockedPartyLabel) {
+      const balance =
+        resolvedPartyType === 'shopkeeper'
+          ? shopkeepers.find((s) => s.id === presetPartyId)?.outstandingBalance ?? 0
+          : resolvedPartyType === 'customer'
+            ? customers.find((c) => c.id === presetPartyId)?.outstandingBalance ?? 0
+            : resolvedPartyType === 'supplier'
+              ? suppliers.find((s) => s.id === presetPartyId)?.outstandingPayable ?? 0
+              : employees.find((e) => e.id === presetPartyId)?.currentPayableBalance ?? 0
+
+      const label =
+        resolvedPartyType === 'shopkeeper'
+          ? 'Outstanding Balance'
+          : resolvedPartyType === 'customer'
+            ? 'Customer Due'
+            : resolvedPartyType === 'supplier'
+              ? 'Payable Due'
+              : 'Wage Liability'
+
+      return { name: lockedPartyLabel, balance, label }
+    }
+
     if (selectedPartyType === 'shopkeeper') {
       const sk = shopkeepers.find((s) => s.id === selectedPartyId)
       return sk ? { name: sk.shopName, balance: sk.outstandingBalance, label: 'Outstanding Balance' } : null
@@ -136,15 +193,17 @@ export function RecordUnifiedPaymentDialog({
   const onSubmit = async (data: PaymentFormData) => {
     try {
       setLoading(true)
-      let partyName = ''
-      if (data.partyType === 'shopkeeper') {
-        partyName = shopkeepers.find((s) => s.id === data.partyId)?.shopName || 'Shopkeeper'
-      } else if (data.partyType === 'customer') {
-        partyName = customers.find((c) => c.id === data.partyId)?.name || 'Customer'
-      } else if (data.partyType === 'supplier') {
-        partyName = suppliers.find((s) => s.id === data.partyId)?.name || 'Supplier'
-      } else if (data.partyType === 'employee') {
-        partyName = employees.find((e) => e.id === data.partyId)?.name || 'Employee'
+      let partyName = lockedPartyLabel || ''
+      if (!partyName) {
+        if (data.partyType === 'shopkeeper') {
+          partyName = shopkeepers.find((s) => s.id === data.partyId)?.shopName || 'Shopkeeper'
+        } else if (data.partyType === 'customer') {
+          partyName = customers.find((c) => c.id === data.partyId)?.name || 'Customer'
+        } else if (data.partyType === 'supplier') {
+          partyName = suppliers.find((s) => s.id === data.partyId)?.name || 'Supplier'
+        } else if (data.partyType === 'employee') {
+          partyName = employees.find((e) => e.id === data.partyId)?.name || 'Employee'
+        }
       }
 
       await financeRepository.recordPayment({
@@ -161,7 +220,7 @@ export function RecordUnifiedPaymentDialog({
       toast.success(
         `Recorded ${formatBDT(data.amount)} payment for ${partyName} (${data.partyType.toUpperCase()})`
       )
-      reset()
+      reset(defaultValues)
       onOpenChange(false)
       onSuccess()
     } catch (err: unknown) {
@@ -173,6 +232,7 @@ export function RecordUnifiedPaymentDialog({
   }
 
   const isDisbursement = selectedPartyType === 'supplier' || selectedPartyType === 'employee'
+  const title = dialogTitle ?? 'Record Transaction Payment'
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -180,12 +240,11 @@ export function RecordUnifiedPaymentDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-foreground">
             <CreditCard className="h-5 w-5 text-primary" />
-            Record Transaction Payment
+            {title}
           </DialogTitle>
         </DialogHeader>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 py-2">
-          {/* Party Type selector */}
           <PaymentPartySelectors
             selectedPartyType={selectedPartyType}
             partyInfo={partyInfo}
@@ -196,6 +255,8 @@ export function RecordUnifiedPaymentDialog({
             onPartyTypeChange={handlePartyTypeChange}
             register={register}
             errors={errors}
+            lockParty={lockParty}
+            lockedPartyLabel={lockedPartyLabel}
           />
 
           <PaymentAmountFields register={register} errors={errors} />
@@ -203,11 +264,11 @@ export function RecordUnifiedPaymentDialog({
           <div className="text-xs text-muted-foreground p-2 rounded bg-muted/10">
             {isDisbursement ? (
               <span className="text-rose-600 dark:text-rose-400 font-medium">
-                🔻 Cash Outflow: Will reduce {selectedPartyType} outstanding payable liability.
+                Cash outflow: reduces {selectedPartyType} outstanding payable liability.
               </span>
             ) : (
               <span className="text-emerald-600 dark:text-emerald-400 font-medium">
-                🟢 Cash Inflow: Will credit {selectedPartyType} ledger and reduce their due balance.
+                Cash inflow: credits {selectedPartyType} ledger and reduces their due balance.
               </span>
             )}
           </div>
