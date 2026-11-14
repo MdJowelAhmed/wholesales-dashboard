@@ -282,7 +282,11 @@ export function RecordUnifiedPaymentDialog({
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={loading} className="bg-primary text-primary-foreground">
+            <Button
+              type="submit"
+              disabled={loading || !selectedPartyId}
+              className="bg-primary text-primary-foreground"
+            >
               {loading ? 'Recording...' : 'Record Payment'}
             </Button>
           </DialogFooter>

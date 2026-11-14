@@ -1,11 +1,11 @@
 import { Supplier, SupplierLedgerEntry, SupplierPayment } from '@/types/suppliers'
-import { roundCurrency } from '@/lib/calculations/financialCalculations'
 import { generateId } from '@/lib/ids'
 import { mockStorage } from '../storage/localStorageAdapter'
 import { STORAGE_SCOPES } from '../storage/storageScopes'
 
 const SUPPLIER_WRITE_SCOPES = [STORAGE_SCOPES.SUPPLIERS, STORAGE_SCOPES.FINANCE, STORAGE_SCOPES.MATERIALS] as const
 import { ledgerEngine } from './ledgerEngine'
+import { financeRepository } from './financeRepository'
 
 export class SuppliersRepository {
   public async listSuppliers(): Promise<Supplier[]> {
@@ -47,32 +47,25 @@ export class SuppliersRepository {
     const supplier = db.suppliers.find((s) => s.id === input.supplierId)
     if (!supplier) throw new Error(`Supplier not found: ${input.supplierId}`)
 
-    const paymentId = generateId('spay')
-    const payment: SupplierPayment = {
-      id: paymentId,
+    const record = await financeRepository.recordPayment({
       date: input.date,
-      amount: roundCurrency(input.amount),
+      partyType: 'supplier',
+      partyId: supplier.id,
+      partyName: supplier.name,
+      amount: input.amount,
       paymentMethod: input.paymentMethod,
       reference: input.reference,
       notes: input.notes,
-    }
-
-    supplier.totalPayments = roundCurrency(supplier.totalPayments + input.amount)
-
-    const { db: updatedDb } = ledgerEngine.appendLedgerEntry(db, {
-      partyType: 'supplier',
-      partyId: supplier.id,
-      date: input.date,
-      type: 'payment',
-      refType: 'payment',
-      refId: input.reference,
-      debit: input.amount,
-      credit: 0,
-      note: `Payment made (${input.paymentMethod}): ${input.reference}`,
     })
 
-    mockStorage.saveDatabase(updatedDb, [...SUPPLIER_WRITE_SCOPES])
-    return payment
+    return {
+      id: record.id,
+      date: record.date,
+      amount: record.amount,
+      paymentMethod: record.paymentMethod,
+      reference: input.reference,
+      notes: input.notes,
+    }
   }
 
   public async createSupplier(

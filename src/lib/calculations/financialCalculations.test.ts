@@ -16,6 +16,7 @@ import {
   calculateDozenWage,
   calculatePnLMetrics,
   calculateRawMaterialInventoryValuation,
+  calculateRawMaterialConsumptionCost,
 } from './financialCalculations'
 
 describe('financialCalculations', () => {
@@ -173,6 +174,24 @@ describe('financialCalculations', () => {
       expect(calculatePieceWage(50, 12)).toBe(600)
       expect(calculateDozenWage(24, 120)).toBe(240)
       expect(calculateDozenWage(18, 120)).toBe(180)
+    })
+  })
+
+  describe('calculateRawMaterialConsumptionCost', () => {
+    it('sums material_issue movements at average cost', () => {
+      expect(
+        calculateRawMaterialConsumptionCost(
+          [
+            {
+              itemType: 'raw_material',
+              movementType: 'material_issue',
+              itemId: 'mat-1',
+              quantityChange: -40,
+            },
+          ],
+          [{ id: 'mat-1', averageCost: 100 }]
+        )
+      ).toBe(4000)
     })
   })
 

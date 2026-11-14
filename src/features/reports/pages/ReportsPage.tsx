@@ -13,12 +13,13 @@ import { inventoryRepository } from '@/mocks/repositories/inventoryRepository'
 import { shopkeepersRepository } from '@/mocks/repositories/shopkeepersRepository'
 import { financeRepository } from '@/mocks/repositories/financeRepository'
 import { Sale } from '@/types/sales'
-import { FinishedGoodsStockItem } from '@/types/inventory'
+import { FinishedGoodsStockItem, InventoryMovement } from '@/types/inventory'
 import { Shopkeeper } from '@/types/shopkeepers'
 import { ExpenseRecord, PayrollRecord } from '@/types/finance'
 import { RawMaterial } from '@/types/rawMaterials'
 import {
   calculatePnLMetrics,
+  calculateRawMaterialConsumptionCost,
   calculateRawMaterialInventoryValuation,
 } from '@/lib/calculations/financialCalculations'
 import { exportToCsv } from '@/lib/utils/csvExport'
@@ -33,6 +34,7 @@ interface ReportsData {
   sales: Sale[]
   stock: FinishedGoodsStockItem[]
   materials: RawMaterial[]
+  movements: InventoryMovement[]
   shopkeepers: Shopkeeper[]
   expenses: ExpenseRecord[]
   payroll: PayrollRecord[]
@@ -43,18 +45,21 @@ export function ReportsPage() {
 
   const { data, loading } = useRepositoryQuery<ReportsData>(
     async () => {
-      const [salesData, stockData, matData, skData, expData, pyrData] = await Promise.all([
-        salesRepository.listSales(),
-        inventoryRepository.getFinishedGoodsStock(),
-        inventoryRepository.getRawMaterialsStock(),
-        shopkeepersRepository.listShopkeepers(),
-        financeRepository.listExpenses(),
-        financeRepository.listPayroll(),
-      ])
+      const [salesData, stockData, matData, movementData, skData, expData, pyrData] =
+        await Promise.all([
+          salesRepository.listSales(),
+          inventoryRepository.getFinishedGoodsStock(),
+          inventoryRepository.getRawMaterialsStock(),
+          inventoryRepository.getStockMovements(),
+          shopkeepersRepository.listShopkeepers(),
+          financeRepository.listExpenses(),
+          financeRepository.listPayroll(),
+        ])
       return {
         sales: salesData,
         stock: stockData,
         materials: matData,
+        movements: movementData,
         shopkeepers: skData,
         expenses: expData,
         payroll: pyrData,
@@ -65,6 +70,7 @@ export function ReportsPage() {
         sales: [],
         stock: [],
         materials: [],
+        movements: [],
         shopkeepers: [],
         expenses: [],
         payroll: [],
@@ -73,11 +79,12 @@ export function ReportsPage() {
     }
   )
 
-  const { sales, stock, materials, shopkeepers, expenses, payroll } = data
+  const { sales, stock, materials, movements, shopkeepers, expenses, payroll } = data
 
   const pnl = useMemo(() => {
     const totalSalesRevenue = sales.reduce((sum, s) => sum + s.totalAmount, 0)
-    const actualMaterialCost = calculateRawMaterialInventoryValuation(materials)
+    const actualMaterialCost = calculateRawMaterialConsumptionCost(movements, materials)
+    const rawMaterialInventoryValuation = calculateRawMaterialInventoryValuation(materials)
     const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0)
     const totalWages = payroll.reduce((sum, p) => sum + p.netPayable, 0)
     const finishedGoodsValuation = stock.reduce((sum, item) => sum + item.valuation, 0)
@@ -92,8 +99,9 @@ export function ReportsPage() {
     return {
       ...baseMetrics,
       finishedGoodsValuation,
+      rawMaterialInventoryValuation,
     }
-  }, [sales, materials, stock, expenses, payroll])
+  }, [sales, materials, movements, stock, expenses, payroll])
 
   const handleExportSalesCsv = () => {
     const rows = sales.map((s) => ({
@@ -144,7 +152,11 @@ export function ReportsPage() {
   const handleExportPnlCsv = () => {
     const rows = [
       { Metric: 'Gross Commercial Revenue (Sales)', 'Amount (BDT)': pnl.grossRevenue },
-      { Metric: 'Raw Material Inventory Valuation (COGS proxy)', 'Amount (BDT)': -pnl.actualMaterialCost },
+      { Metric: 'Cost of Raw Materials Consumed (from production issues)', 'Amount (BDT)': -pnl.actualMaterialCost },
+      {
+        Metric: 'Raw Material Inventory Asset (on-hand valuation)',
+        'Amount (BDT)': pnl.rawMaterialInventoryValuation,
+      },
       { Metric: 'Gross Manufacturing Margin', 'Amount (BDT)': pnl.grossRevenue - pnl.actualMaterialCost },
       { Metric: 'Worker Payroll & Tailor Wages', 'Amount (BDT)': -pnl.totalWages },
       { Metric: 'Factory Overhead Expenses', 'Amount (BDT)': -pnl.totalExpenses },

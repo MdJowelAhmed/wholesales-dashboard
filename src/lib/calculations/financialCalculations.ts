@@ -174,6 +174,26 @@ export function calculateRawMaterialConsumption(
 /**
  * Values on-hand raw material stock using quantity × average cost (inventory asset proxy for P&L COGS context).
  */
+export function calculateRawMaterialConsumptionCost(
+  movements: Array<{
+    itemType: 'finished_goods' | 'raw_material'
+    movementType: string
+    itemId: string
+    quantityChange: number
+  }>,
+  materials: Array<{ id: string; averageCost: number }>
+): number {
+  const costById = new Map(materials.map((m) => [m.id, m.averageCost]))
+  const total = movements
+    .filter((m) => m.itemType === 'raw_material' && m.movementType === 'material_issue')
+    .reduce((sum, movement) => {
+      const qty = Math.abs(movement.quantityChange)
+      const unitCost = costById.get(movement.itemId) ?? 0
+      return sum + qty * unitCost
+    }, 0)
+  return roundCurrency(total)
+}
+
 export function calculateRawMaterialInventoryValuation(
   materials: Array<{ availableQuantity: number; averageCost: number }>
 ): number {

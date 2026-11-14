@@ -5,7 +5,10 @@ import { Button } from '@/components/ui/button'
 import { PnLMetrics, formatBDT } from '@/lib/calculations/financialCalculations'
 
 interface PnlReportTabProps {
-  pnl: PnLMetrics & { finishedGoodsValuation: number }
+  pnl: PnLMetrics & {
+    finishedGoodsValuation: number
+    rawMaterialInventoryValuation: number
+  }
   onExportCsv: () => void
 }
 
@@ -72,6 +75,12 @@ export function PnlReportTab({ pnl, onExportCsv }: PnlReportTabProps): React.JSX
         <div className="rounded-lg border border-border bg-muted/10 p-4 text-xs space-y-1">
           <div className="font-semibold text-foreground">
             Current Factory Balance Sheet Position:
+          </div>
+          <div className="flex justify-between text-muted-foreground">
+            <span>Raw Material Stores (on-hand valuation):</span>
+            <span className="font-medium text-foreground">
+              {formatBDT(pnl.rawMaterialInventoryValuation)}
+            </span>
           </div>
           <div className="flex justify-between text-muted-foreground">
             <span>Finished Goods Warehouse Inventory Valuation:</span>

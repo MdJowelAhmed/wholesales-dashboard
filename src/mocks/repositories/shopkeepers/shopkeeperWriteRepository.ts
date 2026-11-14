@@ -14,6 +14,7 @@ import { mockStorage } from '../../storage/localStorageAdapter'
 import { STORAGE_SCOPES } from '../../storage/storageScopes'
 import { ledgerEngine } from '../ledgerEngine'
 import { stockEngine } from '../stockEngine'
+import { financeRepository } from '../financeRepository'
 import type {
   RecordDeliveryInput,
   RecordShopkeeperPaymentInput,
@@ -233,36 +234,27 @@ export class ShopkeeperWriteRepository {
     const shopkeeper = db.shopkeepers.find((s) => s.id === input.shopkeeperId)
     if (!shopkeeper) throw new Error(`Shopkeeper not found: ${input.shopkeeperId}`)
 
-    const receiptNumber = `RCP-SK-${generateId().slice(0, 4).toUpperCase()}`
-    const payment: ShopkeeperPayment = {
-      id: generateId('skpay'),
-      receiptNumber,
+    const record = await financeRepository.recordPayment({
       date: input.date,
-      amount: roundCurrency(input.amount),
+      partyType: 'shopkeeper',
+      partyId: shopkeeper.id,
+      partyName: shopkeeper.shopName,
+      amount: input.amount,
       paymentMethod: input.paymentMethod,
       reference: input.reference,
       notes: input.notes,
-      createdAt: new Date().toISOString(),
-    }
-
-    db.shopkeeperPayments[shopkeeper.id] = [payment, ...(db.shopkeeperPayments[shopkeeper.id] || [])]
-    shopkeeper.totalPaymentsReceived = roundCurrency(shopkeeper.totalPaymentsReceived + input.amount)
-    shopkeeper.lastTransactionDate = input.date
-
-    const { db: updatedDb } = ledgerEngine.appendLedgerEntry(db, {
-      partyType: 'shopkeeper',
-      partyId: shopkeeper.id,
-      date: input.date,
-      type: 'payment',
-      refType: 'receipt',
-      refId: receiptNumber,
-      debit: 0,
-      credit: input.amount,
-      note: `Payment received (${input.paymentMethod}): ${input.reference || 'N/A'}`,
     })
 
-    mockStorage.saveDatabase(updatedDb, [...SK_LEDGER_WRITE])
-    return payment
+    return {
+      id: record.id,
+      receiptNumber: record.receiptNumber,
+      date: record.date,
+      amount: record.amount,
+      paymentMethod: record.paymentMethod,
+      reference: input.reference,
+      notes: input.notes,
+      createdAt: record.createdAt ?? new Date().toISOString(),
+    }
   }
 
   public async recordReturn(input: RecordShopkeeperReturnInput): Promise<ShopkeeperReturnRecord> {

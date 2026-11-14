@@ -7,6 +7,7 @@ import { STORAGE_SCOPES } from '../storage/storageScopes'
 
 const EMPLOYEE_WRITE_SCOPES = [STORAGE_SCOPES.EMPLOYEES, STORAGE_SCOPES.FINANCE, STORAGE_SCOPES.PRODUCTION] as const
 import { ledgerEngine } from './ledgerEngine'
+import { financeRepository } from './financeRepository'
 
 export class EmployeesRepository {
   public async listEmployees(): Promise<Employee[]> {
@@ -116,26 +117,21 @@ export class EmployeesRepository {
     date: string
     amount: number
     notes?: string
+    paymentMethod?: 'cash' | 'bank_transfer' | 'cheque' | 'bkash' | 'nagad'
   }): Promise<void> {
     const db = mockStorage.getDatabase()
     const employee = db.employees.find((e) => e.id === input.employeeId)
     if (!employee) throw new Error(`Employee not found: ${input.employeeId}`)
 
-    employee.totalPaymentsMade = roundCurrency(employee.totalPaymentsMade + input.amount)
-
-    const { db: updatedDb } = ledgerEngine.appendLedgerEntry(db, {
+    await financeRepository.recordPayment({
+      date: input.date,
       partyType: 'employee',
       partyId: employee.id,
-      date: input.date,
-      type: 'payment',
-      refType: 'payment',
-      refId: generateId('epay'),
-      debit: input.amount,
-      credit: 0,
-      note: `Salary/Wage payment issued: ${input.notes || 'Settlement'}`,
+      partyName: employee.name,
+      amount: input.amount,
+      paymentMethod: input.paymentMethod ?? 'cash',
+      notes: input.notes ?? 'Salary/Wage payment issued',
     })
-
-    mockStorage.saveDatabase(updatedDb, [...EMPLOYEE_WRITE_SCOPES])
   }
 
   public async recoverAdvance(input: {

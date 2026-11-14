@@ -3,10 +3,15 @@ import { LedgerEntry } from '@/types/ledger'
 import { roundCurrency } from '@/lib/calculations/financialCalculations'
 import { generateId } from '@/lib/ids'
 import { mockStorage } from '../storage/localStorageAdapter'
+import { SeedDatabase } from '../seed'
 import { STORAGE_SCOPES } from '../storage/storageScopes'
 
 const FINANCE_WRITE_SCOPES = [STORAGE_SCOPES.FINANCE] as const
 import { ledgerEngine } from './ledgerEngine'
+import {
+  applyPartyPaymentSideEffects,
+  buildPaymentLedgerNote,
+} from './paymentRecordingHelpers'
 
 export interface DashboardMetrics {
   todaySales: number
@@ -167,11 +172,14 @@ export class FinanceRepository {
       notes: input.notes,
       createdAt: new Date().toISOString(),
     }
-    db.payments = [payment, ...db.payments]
 
-    // Synchronize balance and ledger using unified ledgerEngine
+    const dbWithPayment: SeedDatabase = {
+      ...db,
+      payments: [payment, ...db.payments],
+    }
+
     const isPayableParty = input.partyType === 'supplier' || input.partyType === 'employee'
-    const { db: updatedDb } = ledgerEngine.appendLedgerEntry(db, {
+    const { db: withLedger } = ledgerEngine.appendLedgerEntry(dbWithPayment, {
       partyType: input.partyType,
       partyId: input.partyId,
       date: input.date,
@@ -180,32 +188,15 @@ export class FinanceRepository {
       refId: receiptNumber,
       debit: isPayableParty ? input.amount : 0,
       credit: !isPayableParty ? input.amount : 0,
-      note: `Payment received (${input.paymentMethod}): ${input.reference || input.notes || 'N/A'}`,
+      note: buildPaymentLedgerNote(
+        input.partyType,
+        input.paymentMethod,
+        input.reference,
+        input.notes
+      ),
     })
 
-    // Synchronize historical stats on party
-    if (input.partyType === 'shopkeeper') {
-      const sk = updatedDb.shopkeepers.find((s) => s.id === input.partyId)
-      if (sk) {
-        sk.totalPaymentsReceived = roundCurrency(sk.totalPaymentsReceived + input.amount)
-        sk.lastTransactionDate = input.date
-      }
-    } else if (input.partyType === 'customer') {
-      const c = updatedDb.customers.find((cust) => cust.id === input.partyId)
-      if (c) {
-        c.totalPayments = roundCurrency(c.totalPayments + input.amount)
-      }
-    } else if (input.partyType === 'supplier') {
-      const sup = updatedDb.suppliers.find((s) => s.id === input.partyId)
-      if (sup) {
-        sup.totalPayments = roundCurrency(sup.totalPayments + input.amount)
-      }
-    } else if (input.partyType === 'employee') {
-      const emp = updatedDb.employees.find((e) => e.id === input.partyId)
-      if (emp) {
-        emp.totalPaymentsMade = roundCurrency(emp.totalPaymentsMade + input.amount)
-      }
-    }
+    const updatedDb = applyPartyPaymentSideEffects(withLedger, input, payment)
 
     const partyScopes: typeof STORAGE_SCOPES[keyof typeof STORAGE_SCOPES][] = [...FINANCE_WRITE_SCOPES]
     if (input.partyType === 'shopkeeper') partyScopes.push(STORAGE_SCOPES.SHOPKEEPERS)
